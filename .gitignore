@@ -16,3 +16,8 @@ data/cache/*
 *.egg-info/
 build/
 dist/
+
+# OSA local databases
+data/*.db
+data/*.db-shm
+data/*.db-wal
