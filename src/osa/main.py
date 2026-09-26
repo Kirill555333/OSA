@@ -7,7 +7,14 @@ from pathlib import Path
 from osa.core import Agent, AgentError
 from osa.models import LlamaCppConfig, LlamaCppModel, ModelConnectionError
 from osa.permissions import PermissionLevel, PermissionPolicy
-from osa.tools import CalculatorTool, ToolRegistry
+from osa.tools import (
+    CalculatorTool,
+    FileExistsTool,
+    ListDirectoryTool,
+    ReadFileTool,
+    SafeFilesystem,
+    ToolRegistry,
+)
 from osa.utils import EventLogger
 
 
@@ -16,13 +23,17 @@ Be helpful, clear, concise, and honest.
 Answer in the same language as the user unless the user asks otherwise.
 
 You have access to tools.
-When a tool is appropriate for the task, use the available tool instead of
-performing the operation yourself.
+
+Use tools when they are appropriate for the task.
+Never claim that you performed an action unless the corresponding tool
+actually succeeded.
+
+The filesystem tools can only access the OSA workspace.
 """
 
 
 def create_agent() -> Agent:
-    """Create the OSA agent with its local model and tools."""
+    """Create the OSA agent with its model, tools, and permissions."""
     model = LlamaCppModel(
         LlamaCppConfig(
             base_url="http://127.0.0.1:8080",
@@ -31,11 +42,31 @@ def create_agent() -> Agent:
     )
 
     tool_registry = ToolRegistry()
-    tool_registry.register(CalculatorTool())
+
+    tool_registry.register(
+        CalculatorTool()
+    )
+
+    workspace = SafeFilesystem(
+        Path.cwd() / "data" / "workspace"
+    )
+
+    tool_registry.register(
+        ListDirectoryTool(workspace)
+    )
+    tool_registry.register(
+        ReadFileTool(workspace)
+    )
+    tool_registry.register(
+        FileExistsTool(workspace)
+    )
 
     permission_policy = PermissionPolicy(
         {
             "calculator": PermissionLevel.ALLOW,
+            "list_directory": PermissionLevel.ALLOW,
+            "read_file": PermissionLevel.ALLOW,
+            "file_exists": PermissionLevel.ALLOW,
         }
     )
 
@@ -77,10 +108,12 @@ def run_chat() -> None:
             "http://127.0.0.1:8080."
         )
 
-    print("OSA v0.1.7")
+    print("OSA v0.1.8")
     print(f"Local model: {agent.model.model_name}")
     print_tools(agent)
-
+    print()
+    print("Workspace:", Path.cwd() / "data" / "workspace")
+    print()
     print("Type 'exit' or 'quit' to stop.")
     print()
 
