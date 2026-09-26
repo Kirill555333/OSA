@@ -183,7 +183,7 @@ def run_chat() -> None:
             "http://127.0.0.1:8080."
         )
 
-    print("OSA v0.2.2")
+    print("OSA v0.2.3")
     print(f"Local model: {agent.model.model_name}")
 
     print_tools(agent)
