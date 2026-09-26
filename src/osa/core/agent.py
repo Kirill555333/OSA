@@ -6,6 +6,10 @@ import time
 from typing import Any, Mapping
 
 from osa.core.context import ConversationContext
+from osa.memory.integration import (
+    MemoryIntegration,
+    MemoryIntegrationResult,
+)
 from osa.models import (
     ChatMessage,
     ModelError,
@@ -46,15 +50,22 @@ class Agent:
         event_logger: EventLogger | None = None,
         permission_policy: PermissionPolicy | None = None,
         confirmation_handler: ConfirmationHandler | None = None,
+        memory_integration: MemoryIntegration | None = None,
     ) -> None:
         if not 0.0 <= temperature <= 2.0:
-            raise ValueError("temperature must be between 0.0 and 2.0.")
+            raise ValueError(
+                "temperature must be between 0.0 and 2.0."
+            )
 
         if max_tokens <= 0:
-            raise ValueError("max_tokens must be greater than zero.")
+            raise ValueError(
+                "max_tokens must be greater than zero."
+            )
 
         if max_tool_rounds <= 0:
-            raise ValueError("max_tool_rounds must be greater than zero.")
+            raise ValueError(
+                "max_tool_rounds must be greater than zero."
+            )
 
         self._model = model
         self._temperature = temperature
@@ -73,6 +84,8 @@ class Agent:
             confirmation_handler
             or ConfirmationHandler()
         )
+
+        self._memory_integration = memory_integration
 
     @property
     def model(self) -> ModelInterface:
@@ -95,7 +108,7 @@ class Agent:
         return self._permission_policy
 
     def chat(self, user_input: str) -> ModelResponse:
-        """Process a user message, including any required tool calls."""
+        """Process a user message, including memory and tool calls."""
         user_input = user_input.strip()
 
         if not user_input:
@@ -118,7 +131,15 @@ class Agent:
         )
 
         try:
-            response = self._run_agent_loop()
+            memory_result = self._retrieve_memory(
+                user_input
+            )
+
+            response = self._run_agent_loop(
+                memory_result.prompt
+                if memory_result is not None
+                else None
+            )
 
             self._log(
                 "agent.chat.completed",
@@ -138,6 +159,21 @@ class Agent:
             )
 
             raise
+    def reset(self) -> None:
+        """Reset the conversation while preserving the system prompt."""
+        system_message = next(
+            (
+                message
+                for message in self._context.messages()
+                if message.role == "system"
+            ),
+            None,
+        )
+
+        self._context.clear()
+
+        if system_message is not None:
+            self._context.add(system_message)
 
     def execute_tool(
         self,
@@ -173,8 +209,8 @@ class Agent:
 
             if not confirmed:
                 raise PermissionDeniedError(
-                    f"Permission confirmation was not granted for "
-                    f"tool '{tool_name}'."
+                    "Permission confirmation was not granted "
+                    f"for tool '{tool_name}'."
                 )
 
         try:
@@ -212,14 +248,46 @@ class Agent:
 
         return result
 
-    def _run_agent_loop(self) -> ModelResponse:
+    def _retrieve_memory(
+        self,
+        user_input: str,
+    ) -> MemoryIntegrationResult | None:
+        """Retrieve relevant memory without modifying conversation history."""
+        if self._memory_integration is None:
+            return None
+
+        result = self._memory_integration.retrieve(
+            user_input
+        )
+
+        self._log(
+            "memory.retrieval",
+            query_length=len(user_input),
+            result_count=len(result.memories),
+            memories=[
+                {
+                    "id": item.memory.id,
+                    "score": item.score,
+                }
+                for item in result.memories
+            ],
+        )
+
+        return result
+
+    def _run_agent_loop(
+        self,
+        memory_context: str | None = None,
+    ) -> ModelResponse:
         """Run the model/tool loop until a final response is generated."""
         for round_number in range(
             1,
             self._max_tool_rounds + 1,
         ):
             request = ModelRequest(
-                messages=self._context.messages(),
+                messages=self._model_messages(
+                    memory_context
+                ),
                 temperature=self._temperature,
                 max_tokens=self._max_tokens,
                 tools=self._tool_registry.definitions(),
@@ -228,7 +296,9 @@ class Agent:
             started_at = time.perf_counter()
 
             try:
-                response = self._model.generate(request)
+                response = self._model.generate(
+                    request
+                )
             except ModelError as exc:
                 self._log(
                     "model.failed",
@@ -257,6 +327,7 @@ class Agent:
                         content=response.content,
                     )
                 )
+
                 return response
 
             self._context.add(
@@ -281,22 +352,58 @@ class Agent:
                             tool_call_id=tool_call.id,
                         )
                     )
+
                     continue
 
                 self._context.add(
                     ChatMessage(
                         role="tool",
-                        content=self._tool_result_content(result),
+                        content=self._tool_result_content(
+                            result
+                        ),
                         tool_call_id=tool_call.id,
                     )
                 )
 
         raise AgentError(
-            f"Maximum tool rounds exceeded ({self._max_tool_rounds})."
+            "Maximum tool rounds exceeded "
+            f"({self._max_tool_rounds})."
+        )
+
+    def _model_messages(
+        self,
+        memory_context: str | None,
+    ) -> tuple[ChatMessage, ...]:
+        """Build the transient model context for one request."""
+        messages = self._context.messages()
+
+        if not memory_context:
+            return messages
+
+        memory_message = ChatMessage(
+            role="system",
+            content=memory_context,
+        )
+
+        if (
+            messages
+            and messages[0].role == "system"
+        ):
+            return (
+                messages[0],
+                memory_message,
+                *messages[1:],
+            )
+
+        return (
+            memory_message,
+            *messages,
         )
 
     @staticmethod
-    def _tool_result_content(result: ToolResult) -> str:
+    def _tool_result_content(
+        result: ToolResult,
+    ) -> str:
         """Convert a tool result into model-readable text."""
         if result.success:
             return result.output
@@ -319,23 +426,11 @@ class Agent:
             )
 
     @staticmethod
-    def _duration_ms(started_at: float) -> float:
+    def _duration_ms(
+        started_at: float,
+    ) -> float:
         """Return elapsed time in milliseconds."""
         return round(
             (time.perf_counter() - started_at) * 1000,
             2,
         )
-
-    def reset(self) -> None:
-        """Reset the conversation while preserving the system prompt."""
-        system_message: ChatMessage | None = None
-
-        for message in self._context.messages():
-            if message.role == "system":
-                system_message = message
-                break
-
-        self._context.clear()
-
-        if system_message is not None:
-            self._context.add(system_message)
