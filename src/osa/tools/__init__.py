@@ -8,14 +8,27 @@ from osa.tools.filesystem import (
     ReadFileTool,
     SafeFilesystem,
 )
-from osa.tools.registry import ToolError, ToolInterface, ToolRegistry, ToolResult
+from osa.tools.memory import (
+    ForgetTool,
+    RecallTool,
+    RememberTool,
+)
+from osa.tools.registry import (
+    ToolError,
+    ToolInterface,
+    ToolRegistry,
+    ToolResult,
+)
 
 __all__ = [
     "CalculatorTool",
     "FileExistsTool",
     "FilesystemToolError",
+    "ForgetTool",
     "ListDirectoryTool",
     "ReadFileTool",
+    "RecallTool",
+    "RememberTool",
     "SafeFilesystem",
     "ToolError",
     "ToolInterface",

@@ -6,6 +6,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+import unicodedata
 
 
 class MemoryError(RuntimeError):
@@ -151,12 +152,12 @@ class LongTermMemory:
         limit: int = 10,
     ) -> tuple[MemoryRecord, ...]:
         """
-        Search memories using case-insensitive keyword matching.
+        Search memories using Unicode-aware keyword matching.
 
         Every meaningful word in the query must be present in either
         the memory content or its category.
         """
-        normalized_query = query.strip()
+        normalized_query = self._normalize_text(query)
 
         if not normalized_query:
             raise ValueError(
@@ -170,7 +171,7 @@ class LongTermMemory:
 
         terms = tuple(
             dict.fromkeys(
-                term.lower()
+                term
                 for term in normalized_query.split()
                 if term
             )
@@ -181,57 +182,44 @@ class LongTermMemory:
                 "Search query must contain at least one word."
             )
 
-        conditions: list[str] = []
-        parameters: list[str | int] = []
-
-        for term in terms:
-            conditions.append(
-                """
-                (
-                    LOWER(content) LIKE ?
-                    OR LOWER(category) LIKE ?
-                )
-                """
-            )
-
-            pattern = f"%{term}%"
-            parameters.extend(
-                (
-                    pattern,
-                    pattern,
-                )
-            )
-
-        where_clause = " AND ".join(
-            conditions
-        )
-
-        sql = f"""
-            SELECT
-                id,
-                content,
-                category,
-                importance,
-                created_at,
-                updated_at
-            FROM memories
-            WHERE {where_clause}
-            ORDER BY importance DESC, updated_at DESC
-            LIMIT ?
-        """
-
-        parameters.append(limit)
-
         with self._connect() as connection:
             rows = connection.execute(
-                sql,
-                parameters,
+                """
+                SELECT
+                    id,
+                    content,
+                    category,
+                    importance,
+                    created_at,
+                    updated_at
+                FROM memories
+                ORDER BY importance DESC, updated_at DESC, id DESC
+                """
             ).fetchall()
 
-        return tuple(
-            self._row_to_record(row)
-            for row in rows
-        )
+        matches: list[MemoryRecord] = []
+
+        for row in rows:
+            record = self._row_to_record(row)
+
+            searchable_text = (
+                f"{record.content} {record.category}"
+            )
+
+            normalized_text = self._normalize_text(
+                searchable_text
+            )
+
+            if all(
+                term in normalized_text
+                for term in terms
+            ):
+                matches.append(record)
+
+                if len(matches) >= limit:
+                    break
+
+        return tuple(matches)
 
     def delete(self, memory_id: int) -> None:
         """Delete a memory by ID."""
@@ -294,6 +282,14 @@ class LongTermMemory:
         connection.row_factory = sqlite3.Row
 
         return connection
+
+    @staticmethod
+    def _normalize_text(value: str) -> str:
+        """Normalize text for Unicode-aware case-insensitive search."""
+        return unicodedata.normalize(
+            "NFKC",
+            value,
+        ).casefold()
 
     @staticmethod
     def _timestamp() -> str:

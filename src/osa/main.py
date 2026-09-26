@@ -5,13 +5,25 @@ from __future__ import annotations
 from pathlib import Path
 
 from osa.core import Agent, AgentError
-from osa.models import LlamaCppConfig, LlamaCppModel, ModelConnectionError
-from osa.permissions import PermissionLevel, PermissionPolicy
+from osa.memory import LongTermMemory
+from osa.models import (
+    LlamaCppConfig,
+    LlamaCppModel,
+    ModelConnectionError,
+)
+from osa.permissions import (
+    ConfirmationHandler,
+    PermissionLevel,
+    PermissionPolicy,
+)
 from osa.tools import (
     CalculatorTool,
     FileExistsTool,
+    ForgetTool,
     ListDirectoryTool,
+    RecallTool,
     ReadFileTool,
+    RememberTool,
     SafeFilesystem,
     ToolRegistry,
 )
@@ -29,11 +41,35 @@ Never claim that you performed an action unless the corresponding tool
 actually succeeded.
 
 The filesystem tools can only access the OSA workspace.
+
+Memory rules:
+- Use the remember tool when the user explicitly asks you to remember something.
+- Use the recall tool when information from long-term memory is relevant.
+- Do not invent memories.
+- Do not claim to remember something unless it was actually retrieved from memory.
+- Use the forget tool only when the user asks you to forget stored information.
 """
 
 
+def confirm_tool_action(description: str) -> bool:
+    """Ask the user to confirm a sensitive tool action."""
+    while True:
+        answer = input(
+            f"\n{description}\n"
+            "Confirm action? [y/N]: "
+        ).strip().lower()
+
+        if answer in {"y", "yes"}:
+            return True
+
+        if answer in {"", "n", "no"}:
+            return False
+
+        print("Please answer with y or n.")
+
+
 def create_agent() -> Agent:
-    """Create the OSA agent with its model, tools, and permissions."""
+    """Create the OSA agent with its model, tools, memory, and permissions."""
     model = LlamaCppModel(
         LlamaCppConfig(
             base_url="http://127.0.0.1:8080",
@@ -61,13 +97,34 @@ def create_agent() -> Agent:
         FileExistsTool(workspace)
     )
 
+    memory = LongTermMemory(
+        Path.cwd() / "data" / "osa-memory.db"
+    )
+
+    tool_registry.register(
+        RememberTool(memory)
+    )
+    tool_registry.register(
+        RecallTool(memory)
+    )
+    tool_registry.register(
+        ForgetTool(memory)
+    )
+
     permission_policy = PermissionPolicy(
         {
             "calculator": PermissionLevel.ALLOW,
             "list_directory": PermissionLevel.ALLOW,
             "read_file": PermissionLevel.ALLOW,
             "file_exists": PermissionLevel.ALLOW,
+            "remember": PermissionLevel.ALLOW,
+            "recall": PermissionLevel.ALLOW,
+            "forget": PermissionLevel.CONFIRM,
         }
+    )
+
+    confirmation_handler = ConfirmationHandler(
+        confirm_tool_action
     )
 
     event_logger = EventLogger(
@@ -82,6 +139,7 @@ def create_agent() -> Agent:
         tool_registry=tool_registry,
         event_logger=event_logger,
         permission_policy=permission_policy,
+        confirmation_handler=confirmation_handler,
     )
 
 
@@ -108,12 +166,11 @@ def run_chat() -> None:
             "http://127.0.0.1:8080."
         )
 
-    print("OSA v0.1.8")
+    print("OSA v0.2.1")
     print(f"Local model: {agent.model.model_name}")
+
     print_tools(agent)
-    print()
-    print("Workspace:", Path.cwd() / "data" / "workspace")
-    print()
+
     print("Type 'exit' or 'quit' to stop.")
     print()
 
