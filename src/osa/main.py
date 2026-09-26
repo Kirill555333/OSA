@@ -6,8 +6,10 @@ from pathlib import Path
 
 from osa.core import Agent, AgentError
 from osa.models import LlamaCppConfig, LlamaCppModel, ModelConnectionError
+from osa.permissions import PermissionLevel, PermissionPolicy
 from osa.tools import CalculatorTool, ToolRegistry
 from osa.utils import EventLogger
+
 
 SYSTEM_PROMPT = """You are OSA, a personal AI assistant.
 Be helpful, clear, concise, and honest.
@@ -31,6 +33,12 @@ def create_agent() -> Agent:
     tool_registry = ToolRegistry()
     tool_registry.register(CalculatorTool())
 
+    permission_policy = PermissionPolicy(
+        {
+            "calculator": PermissionLevel.ALLOW,
+        }
+    )
+
     event_logger = EventLogger(
         Path.cwd() / "logs" / "osa-events.jsonl"
     )
@@ -42,6 +50,7 @@ def create_agent() -> Agent:
         max_tokens=512,
         tool_registry=tool_registry,
         event_logger=event_logger,
+        permission_policy=permission_policy,
     )
 
 
@@ -50,7 +59,10 @@ def print_tools(agent: Agent) -> None:
     print("Available tools:")
 
     for tool in agent.tools.describe():
-        print(f"- {tool['name']}: {tool['description']}")
+        print(
+            f"- {tool['name']}: "
+            f"{tool['description']}"
+        )
 
     print()
 
@@ -65,10 +77,10 @@ def run_chat() -> None:
             "http://127.0.0.1:8080."
         )
 
-    print("OSA v0.1.6")
+    print("OSA v0.1.7")
     print(f"Local model: {agent.model.model_name}")
     print_tools(agent)
-    print("Event log:", Path.cwd() / "logs" / "osa-events.jsonl")
+
     print("Type 'exit' or 'quit' to stop.")
     print()
 

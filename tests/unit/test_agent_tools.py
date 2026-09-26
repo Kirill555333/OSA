@@ -1,5 +1,6 @@
 from osa.core import Agent
 from osa.models import ModelInterface, ModelRequest, ModelResponse
+from osa.permissions import PermissionLevel, PermissionPolicy
 from osa.tools import CalculatorTool, ToolRegistry
 
 
@@ -21,13 +22,20 @@ class FakeModel(ModelInterface):
 
 
 def create_agent_with_calculator() -> Agent:
-    """Create an Agent with the calculator tool registered."""
+    """Create an Agent with the calculator tool registered and allowed."""
     registry = ToolRegistry()
     registry.register(CalculatorTool())
+
+    permission_policy = PermissionPolicy(
+        {
+            "calculator": PermissionLevel.ALLOW,
+        }
+    )
 
     return Agent(
         model=FakeModel(),
         tool_registry=registry,
+        permission_policy=permission_policy,
     )
 
 

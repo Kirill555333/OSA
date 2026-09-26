@@ -13,12 +13,22 @@ from osa.models import (
     ModelRequest,
     ModelResponse,
 )
+from osa.permissions import (
+    ConfirmationHandler,
+    ConfirmationRequest,
+    PermissionLevel,
+    PermissionPolicy,
+)
 from osa.tools import ToolRegistry, ToolResult
 from osa.utils import EventLogger
 
 
 class AgentError(RuntimeError):
     """Base exception raised by the OSA agent."""
+
+
+class PermissionDeniedError(AgentError):
+    """Raised when a tool execution is denied."""
 
 
 class Agent:
@@ -34,6 +44,8 @@ class Agent:
         tool_registry: ToolRegistry | None = None,
         max_tool_rounds: int = 8,
         event_logger: EventLogger | None = None,
+        permission_policy: PermissionPolicy | None = None,
+        confirmation_handler: ConfirmationHandler | None = None,
     ) -> None:
         if not 0.0 <= temperature <= 2.0:
             raise ValueError("temperature must be between 0.0 and 2.0.")
@@ -52,6 +64,16 @@ class Agent:
         self._tool_registry = tool_registry or ToolRegistry()
         self._event_logger = event_logger
 
+        self._permission_policy = (
+            permission_policy
+            or PermissionPolicy()
+        )
+
+        self._confirmation_handler = (
+            confirmation_handler
+            or ConfirmationHandler()
+        )
+
     @property
     def model(self) -> ModelInterface:
         """Return the model used by the agent."""
@@ -66,6 +88,11 @@ class Agent:
     def tools(self) -> ToolRegistry:
         """Return the registry containing available tools."""
         return self._tool_registry
+
+    @property
+    def permissions(self) -> PermissionPolicy:
+        """Return the permission policy used by the agent."""
+        return self._permission_policy
 
     def chat(self, user_input: str) -> ModelResponse:
         """Process a user message, including any required tool calls."""
@@ -117,7 +144,39 @@ class Agent:
         tool_name: str,
         arguments: Mapping[str, Any],
     ) -> ToolResult:
-        """Execute a registered tool."""
+        """Execute a registered tool after permission checks."""
+        decision = self._permission_policy.decide(tool_name)
+
+        self._log(
+            "permission.decision",
+            tool=tool_name,
+            level=decision.level.value,
+            reason=decision.reason,
+        )
+
+        if decision.level == PermissionLevel.DENY:
+            raise PermissionDeniedError(
+                f"Permission denied for tool '{tool_name}': "
+                f"{decision.reason}"
+            )
+
+        if decision.level == PermissionLevel.CONFIRM:
+            confirmed = self._confirmation_handler.request(
+                ConfirmationRequest(
+                    tool_name=tool_name,
+                    description=(
+                        f"OSA wants to execute tool '{tool_name}'. "
+                        "Do you allow this action?"
+                    ),
+                )
+            )
+
+            if not confirmed:
+                raise PermissionDeniedError(
+                    f"Permission confirmation was not granted for "
+                    f"tool '{tool_name}'."
+                )
+
         try:
             tool = self._tool_registry.get(tool_name)
         except KeyError as exc:
@@ -155,7 +214,10 @@ class Agent:
 
     def _run_agent_loop(self) -> ModelResponse:
         """Run the model/tool loop until a final response is generated."""
-        for round_number in range(1, self._max_tool_rounds + 1):
+        for round_number in range(
+            1,
+            self._max_tool_rounds + 1,
+        ):
             request = ModelRequest(
                 messages=self._context.messages(),
                 temperature=self._temperature,
@@ -206,10 +268,20 @@ class Agent:
             )
 
             for tool_call in response.tool_calls:
-                result = self.execute_tool(
-                    tool_call.name,
-                    tool_call.arguments,
-                )
+                try:
+                    result = self.execute_tool(
+                        tool_call.name,
+                        tool_call.arguments,
+                    )
+                except PermissionDeniedError as exc:
+                    self._context.add(
+                        ChatMessage(
+                            role="tool",
+                            content=f"Tool execution denied: {exc}",
+                            tool_call_id=tool_call.id,
+                        )
+                    )
+                    continue
 
                 self._context.add(
                     ChatMessage(
@@ -229,17 +301,30 @@ class Agent:
         if result.success:
             return result.output
 
-        return f"Tool execution failed: {result.error or 'Unknown error.'}"
+        return (
+            "Tool execution failed: "
+            f"{result.error or 'Unknown error.'}"
+        )
 
-    def _log(self, event: str, **data: Any) -> None:
+    def _log(
+        self,
+        event: str,
+        **data: Any,
+    ) -> None:
         """Write an event when observability is enabled."""
         if self._event_logger is not None:
-            self._event_logger.log(event, **data)
+            self._event_logger.log(
+                event,
+                **data,
+            )
 
     @staticmethod
     def _duration_ms(started_at: float) -> float:
         """Return elapsed time in milliseconds."""
-        return round((time.perf_counter() - started_at) * 1000, 2)
+        return round(
+            (time.perf_counter() - started_at) * 1000,
+            2,
+        )
 
     def reset(self) -> None:
         """Reset the conversation while preserving the system prompt."""

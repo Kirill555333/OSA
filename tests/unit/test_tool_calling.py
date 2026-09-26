@@ -5,6 +5,7 @@ from osa.models import (
     ModelResponse,
     ToolCall,
 )
+from osa.permissions import PermissionLevel, PermissionPolicy
 from osa.tools import CalculatorTool, ToolRegistry
 
 
@@ -49,13 +50,20 @@ class FakeToolCallingModel(ModelInterface):
 
 
 def create_agent() -> Agent:
-    """Create an Agent with the calculator tool."""
+    """Create an Agent with an allowed calculator tool."""
     registry = ToolRegistry()
     registry.register(CalculatorTool())
+
+    permission_policy = PermissionPolicy(
+        {
+            "calculator": PermissionLevel.ALLOW,
+        }
+    )
 
     return Agent(
         model=FakeToolCallingModel(),
         tool_registry=registry,
+        permission_policy=permission_policy,
     )
 
 
@@ -64,9 +72,16 @@ def test_agent_executes_model_tool_call() -> None:
     registry = ToolRegistry()
     registry.register(CalculatorTool())
 
+    permission_policy = PermissionPolicy(
+        {
+            "calculator": PermissionLevel.ALLOW,
+        }
+    )
+
     agent = Agent(
         model=model,
         tool_registry=registry,
+        permission_policy=permission_policy,
     )
 
     response = agent.chat("Сколько будет 347 * 29?")
@@ -76,16 +91,12 @@ def test_agent_executes_model_tool_call() -> None:
 
 
 def test_tool_definition_is_sent_to_model() -> None:
-    model = FakeToolCallingModel()
-    registry = ToolRegistry()
-    registry.register(CalculatorTool())
-
-    agent = Agent(
-        model=model,
-        tool_registry=registry,
-    )
+    agent = create_agent()
 
     agent.chat("Посчитай 10 + 5.")
+
+    model = agent.model
+    assert isinstance(model, FakeToolCallingModel)
 
     assert model.calls[0].tools[0].name == "calculator"
     assert model.calls[0].tools[0].parameters["type"] == "object"
