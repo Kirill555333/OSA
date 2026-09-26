@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+
+from osa.recovery import ErrorRecovery
 from osa.core import Agent, AgentError
 from osa.memory import (
     AutomaticMemory,
@@ -22,6 +24,7 @@ from osa.permissions import (
     PermissionPolicy,
 )
 from osa.tools import (
+    SystemInfoTool,
     WriteFileTool,
     CalculatorTool,
     FileExistsTool,
@@ -65,6 +68,9 @@ personal identifiers should not be treated as long-term memory.
 - The write_file tool can modify files only inside the OSA workspace.
 - Writing a file requires user confirmation.
 - Existing files must not be overwritten unless overwrite=true.
+
+- The system_info tool is read-only and reports host system information.
+- System information must never be treated as a permission to modify the host.
 """
 
 
@@ -116,6 +122,9 @@ def create_agent() -> Agent:
     tool_registry.register(
         WriteFileTool(workspace)
     )
+    tool_registry.register(
+        SystemInfoTool()
+    )
     memory = LongTermMemory(
         Path.cwd() / "data" / "osa-memory.db"
     )
@@ -154,6 +163,7 @@ def create_agent() -> Agent:
             "file_exists": PermissionLevel.ALLOW,
             "remember": PermissionLevel.ALLOW,
             "recall": PermissionLevel.ALLOW,
+            "system_info": PermissionLevel.ALLOW,
             "forget": PermissionLevel.CONFIRM,
         }
     )
@@ -176,6 +186,7 @@ def create_agent() -> Agent:
         event_logger=event_logger,
         permission_policy=permission_policy,
         confirmation_handler=confirmation_handler,
+        recovery=ErrorRecovery(),
         memory_integration=memory_integration,
     )
 

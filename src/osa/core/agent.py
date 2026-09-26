@@ -10,7 +10,7 @@ from osa.memory.integration import (
     MemoryIntegration,
     MemoryIntegrationResult,
 )
-
+from osa.recovery import ErrorRecovery, RecoveryConfig
 from osa.memory.automatic import AutomaticMemory
 
 from osa.models import (
@@ -55,6 +55,7 @@ class Agent:
         confirmation_handler: ConfirmationHandler | None = None,
         memory_integration: MemoryIntegration | None = None,
         automatic_memory: AutomaticMemory | None = None,
+        recovery: ErrorRecovery | None = None,
     ) -> None:
         if not 0.0 <= temperature <= 2.0:
             raise ValueError(
@@ -90,6 +91,15 @@ class Agent:
         )
 
         self._memory_integration = memory_integration
+        self._recovery = (
+            recovery
+            or ErrorRecovery(
+                RecoveryConfig(
+                    max_model_retries=1,
+                    model_retry_delay_seconds=0.25,
+                )
+            )
+        )
         self._automatic_memory = automatic_memory
 
     @property
@@ -333,9 +343,19 @@ class Agent:
             started_at = time.perf_counter()
 
             try:
-                response = self._model.generate(
-                    request
+                response, attempts = self._recovery.run_model(
+                    lambda: self._model.generate(
+                        request
+                    )
                 )
+
+                if attempts > 1:
+                    self._log(
+                        "recovery.model_retry",
+                        attempts=attempts,
+                        round=round_number,
+                    )
+
             except ModelError as exc:
                 self._log(
                     "model.failed",
@@ -347,7 +367,6 @@ class Agent:
                 raise AgentError(
                     f"Model request failed: {exc}"
                 ) from exc
-
             self._log(
                 "model.response",
                 duration_ms=self._duration_ms(started_at),
@@ -382,10 +401,38 @@ class Agent:
                         tool_call.arguments,
                     )
                 except PermissionDeniedError as exc:
+                    self._log(
+                        "recovery.tool_denied",
+                        tool=tool_call.name,
+                        error=str(exc),
+                    )
+
                     self._context.add(
                         ChatMessage(
                             role="tool",
                             content=f"Tool execution denied: {exc}",
+                            tool_call_id=tool_call.id,
+                        )
+                    )
+
+                    continue
+
+                except Exception as exc:
+                    error_message = ErrorRecovery.tool_exception_message(
+                        tool_call.name,
+                        exc,
+                    )
+
+                    self._log(
+                        "recovery.tool_error",
+                        tool=tool_call.name,
+                        error=str(exc),
+                    )
+
+                    self._context.add(
+                        ChatMessage(
+                            role="tool",
+                            content=error_message,
                             tool_call_id=tool_call.id,
                         )
                     )
