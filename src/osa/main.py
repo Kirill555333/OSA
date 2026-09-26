@@ -5,7 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from osa.core import Agent, AgentError
-from osa.memory import LongTermMemory
+from osa.memory import (
+    AutomaticMemory,
+    LongTermMemory,
+)
 from osa.memory.integration import MemoryIntegration
 from osa.memory.retrieval import MemoryRetriever
 from osa.models import (
@@ -53,6 +56,10 @@ Long-term memory rules:
 - Do not claim to remember something unless it was actually retrieved from
   memory.
 - Use the forget tool only when the user asks you to forget stored information.
+
+Automatic memory may save stable, useful user or project facts.
+Transient events, questions, commands, secrets, credentials, and sensitive
+personal identifiers should not be treated as long-term memory.
 """
 
 
@@ -106,6 +113,10 @@ def create_agent() -> Agent:
         Path.cwd() / "data" / "osa-memory.db"
     )
 
+    automatic_memory = AutomaticMemory(
+        memory
+    )
+
     tool_registry.register(
         RememberTool(memory)
     )
@@ -151,6 +162,7 @@ def create_agent() -> Agent:
         model=model,
         system_prompt=SYSTEM_PROMPT,
         temperature=0.2,
+        automatic_memory=automatic_memory,
         max_tokens=512,
         tool_registry=tool_registry,
         event_logger=event_logger,

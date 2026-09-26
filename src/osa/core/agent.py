@@ -10,6 +10,9 @@ from osa.memory.integration import (
     MemoryIntegration,
     MemoryIntegrationResult,
 )
+
+from osa.memory.automatic import AutomaticMemory
+
 from osa.models import (
     ChatMessage,
     ModelError,
@@ -51,6 +54,7 @@ class Agent:
         permission_policy: PermissionPolicy | None = None,
         confirmation_handler: ConfirmationHandler | None = None,
         memory_integration: MemoryIntegration | None = None,
+        automatic_memory: AutomaticMemory | None = None,
     ) -> None:
         if not 0.0 <= temperature <= 2.0:
             raise ValueError(
@@ -86,6 +90,7 @@ class Agent:
         )
 
         self._memory_integration = memory_integration
+        self._automatic_memory = automatic_memory
 
     @property
     def model(self) -> ModelInterface:
@@ -140,7 +145,9 @@ class Agent:
                 if memory_result is not None
                 else None
             )
-
+            self._capture_automatic_memory(
+                user_input
+            )
             self._log(
                 "agent.chat.completed",
                 duration_ms=self._duration_ms(started_at),
@@ -174,6 +181,36 @@ class Agent:
 
         if system_message is not None:
             self._context.add(system_message)
+
+    def _capture_automatic_memory(
+        self,
+        user_input: str,
+    ) -> None:
+        """Capture a stable memory without affecting the chat result."""
+        if self._automatic_memory is None:
+            return
+
+        started_at = time.perf_counter()
+
+        try:
+            result = self._automatic_memory.capture(
+                user_input
+            )
+        except Exception as exc:
+            self._log(
+                "memory.automatic.failed",
+                duration_ms=self._duration_ms(started_at),
+                error=str(exc),
+            )
+            return
+
+        self._log(
+            "memory.automatic",
+            duration_ms=self._duration_ms(started_at),
+            saved=result.saved,
+            memory_id=result.memory_id,
+            reason=result.reason,
+        )
 
     def execute_tool(
         self,

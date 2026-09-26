@@ -10,10 +10,19 @@ from osa.memory.retrieval import (
     MemorySearchResult,
 )
 
+from osa.memory.automatic import (
+    AutomaticMemory,
+    AutomaticMemoryResult,
+    MemoryCandidate,
+)
+
 __all__ = [
     "LongTermMemory",
     "MemoryError",
     "MemoryRecord",
     "MemoryRetriever",
     "MemorySearchResult",
+    "AutomaticMemory",
+    "AutomaticMemoryResult",
+    "MemoryCandidate",
 ]
