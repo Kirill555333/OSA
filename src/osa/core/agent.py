@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any, Mapping
 
 from osa.core.context import ConversationContext
@@ -13,6 +14,7 @@ from osa.models import (
     ModelResponse,
 )
 from osa.tools import ToolRegistry, ToolResult
+from osa.utils import EventLogger
 
 
 class AgentError(RuntimeError):
@@ -31,6 +33,7 @@ class Agent:
         max_tokens: int = 512,
         tool_registry: ToolRegistry | None = None,
         max_tool_rounds: int = 8,
+        event_logger: EventLogger | None = None,
     ) -> None:
         if not 0.0 <= temperature <= 2.0:
             raise ValueError("temperature must be between 0.0 and 2.0.")
@@ -47,6 +50,7 @@ class Agent:
         self._max_tool_rounds = max_tool_rounds
         self._context = ConversationContext(system_prompt)
         self._tool_registry = tool_registry or ToolRegistry()
+        self._event_logger = event_logger
 
     @property
     def model(self) -> ModelInterface:
@@ -70,6 +74,9 @@ class Agent:
         if not user_input:
             raise ValueError("user_input cannot be empty.")
 
+        previous_context = self._context.messages()
+        started_at = time.perf_counter()
+
         self._context.add(
             ChatMessage(
                 role="user",
@@ -77,10 +84,32 @@ class Agent:
             )
         )
 
+        self._log(
+            "agent.chat.started",
+            input_length=len(user_input),
+            context_messages=len(previous_context),
+        )
+
         try:
-            return self._run_agent_loop()
-        except AgentError:
-            self._context.remove_last()
+            response = self._run_agent_loop()
+
+            self._log(
+                "agent.chat.completed",
+                duration_ms=self._duration_ms(started_at),
+                response_length=len(response.content),
+            )
+
+            return response
+
+        except AgentError as exc:
+            self._context.restore(previous_context)
+
+            self._log(
+                "agent.chat.failed",
+                duration_ms=self._duration_ms(started_at),
+                error=str(exc),
+            )
+
             raise
 
     def execute_tool(
@@ -94,11 +123,39 @@ class Agent:
         except KeyError as exc:
             raise AgentError(str(exc)) from exc
 
-        return tool.execute(arguments)
+        started_at = time.perf_counter()
+
+        self._log(
+            "tool.call",
+            tool=tool_name,
+            arguments=dict(arguments),
+        )
+
+        try:
+            result = tool.execute(arguments)
+        except Exception as exc:
+            self._log(
+                "tool.failed",
+                tool=tool_name,
+                duration_ms=self._duration_ms(started_at),
+                error=str(exc),
+            )
+            raise
+
+        self._log(
+            "tool.result",
+            tool=tool_name,
+            success=result.success,
+            duration_ms=self._duration_ms(started_at),
+            output_length=len(result.output),
+            error=result.error,
+        )
+
+        return result
 
     def _run_agent_loop(self) -> ModelResponse:
         """Run the model/tool loop until a final response is generated."""
-        for _ in range(self._max_tool_rounds):
+        for round_number in range(1, self._max_tool_rounds + 1):
             request = ModelRequest(
                 messages=self._context.messages(),
                 temperature=self._temperature,
@@ -106,12 +163,30 @@ class Agent:
                 tools=self._tool_registry.definitions(),
             )
 
+            started_at = time.perf_counter()
+
             try:
                 response = self._model.generate(request)
             except ModelError as exc:
+                self._log(
+                    "model.failed",
+                    duration_ms=self._duration_ms(started_at),
+                    error=str(exc),
+                    round=round_number,
+                )
+
                 raise AgentError(
                     f"Model request failed: {exc}"
                 ) from exc
+
+            self._log(
+                "model.response",
+                duration_ms=self._duration_ms(started_at),
+                finish_reason=response.finish_reason,
+                content_length=len(response.content),
+                tool_call_count=len(response.tool_calls),
+                round=round_number,
+            )
 
             if not response.tool_calls:
                 self._context.add(
@@ -155,6 +230,16 @@ class Agent:
             return result.output
 
         return f"Tool execution failed: {result.error or 'Unknown error.'}"
+
+    def _log(self, event: str, **data: Any) -> None:
+        """Write an event when observability is enabled."""
+        if self._event_logger is not None:
+            self._event_logger.log(event, **data)
+
+    @staticmethod
+    def _duration_ms(started_at: float) -> float:
+        """Return elapsed time in milliseconds."""
+        return round((time.perf_counter() - started_at) * 1000, 2)
 
     def reset(self) -> None:
         """Reset the conversation while preserving the system prompt."""

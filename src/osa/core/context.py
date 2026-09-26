@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from osa.models import ChatMessage
 
 
@@ -33,6 +35,10 @@ class ConversationContext:
     def messages(self) -> tuple[ChatMessage, ...]:
         """Return an immutable snapshot of the conversation."""
         return tuple(self._messages)
+
+    def restore(self, messages: Iterable[ChatMessage]) -> None:
+        """Restore the context from a previous snapshot."""
+        self._messages = list(messages)
 
     def clear(self) -> None:
         """Clear the conversation."""

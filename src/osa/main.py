@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from osa.core import Agent, AgentError
 from osa.models import LlamaCppConfig, LlamaCppModel, ModelConnectionError
 from osa.tools import CalculatorTool, ToolRegistry
-
+from osa.utils import EventLogger
 
 SYSTEM_PROMPT = """You are OSA, a personal AI assistant.
 Be helpful, clear, concise, and honest.
@@ -29,12 +31,17 @@ def create_agent() -> Agent:
     tool_registry = ToolRegistry()
     tool_registry.register(CalculatorTool())
 
+    event_logger = EventLogger(
+        Path.cwd() / "logs" / "osa-events.jsonl"
+    )
+
     return Agent(
         model=model,
         system_prompt=SYSTEM_PROMPT,
         temperature=0.2,
         max_tokens=512,
         tool_registry=tool_registry,
+        event_logger=event_logger,
     )
 
 
@@ -58,9 +65,10 @@ def run_chat() -> None:
             "http://127.0.0.1:8080."
         )
 
-    print("OSA v0.1.5")
+    print("OSA v0.1.6")
     print(f"Local model: {agent.model.model_name}")
     print_tools(agent)
+    print("Event log:", Path.cwd() / "logs" / "osa-events.jsonl")
     print("Type 'exit' or 'quit' to stop.")
     print()
 
