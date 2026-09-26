@@ -1,6 +1,7 @@
 """Tool layer for OSA."""
 
 from osa.tools.calculator import CalculatorTool
+from osa.tools.filesystem import WriteFileTool
 from osa.tools.filesystem import (
     FileExistsTool,
     FilesystemToolError,
@@ -34,4 +35,5 @@ __all__ = [
     "ToolInterface",
     "ToolRegistry",
     "ToolResult",
+    "WriteFileTool",
 ]

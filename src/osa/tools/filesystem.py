@@ -114,6 +114,51 @@ class SafeFilesystem:
         """Check whether a path exists inside the workspace."""
         return self.resolve_path(requested_path).exists()
 
+    def write_file(
+        self,
+        requested_path: str,
+        content: str,
+        *,
+        overwrite: bool = False,
+    ) -> int:
+        """Write UTF-8 text inside the workspace."""
+        if not isinstance(content, str):
+            raise TypeError(
+                "content must be a string."
+            )
+
+        file_path = self.resolve_path(
+            requested_path
+        )
+
+        if file_path.exists():
+            if not file_path.is_file():
+                raise IsADirectoryError(
+                    f"Path is not a file: {requested_path}"
+                )
+
+            if not overwrite:
+                raise FileExistsError(
+                    f"File already exists: {requested_path}"
+                )
+
+        file_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        try:
+            written = file_path.write_text(
+                content,
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            raise FilesystemToolError(
+                f"Failed to write file: {requested_path}"
+            ) from exc
+
+        return written
+
     def _display_path(self, path: Path) -> str:
         """Return a workspace-relative display path."""
         relative = path.relative_to(self._root)
@@ -342,4 +387,120 @@ class FileExistsTool(ToolInterface):
         return ToolResult(
             success=True,
             output="true" if exists else "false",
+        )
+class WriteFileTool(ToolInterface):
+    """Write UTF-8 text files inside the OSA workspace."""
+
+    def __init__(
+        self,
+        filesystem: SafeFilesystem,
+    ) -> None:
+        self._filesystem = filesystem
+
+    @property
+    def name(self) -> str:
+        """Return the unique tool name."""
+        return "write_file"
+
+    @property
+    def description(self) -> str:
+        """Return a human-readable tool description."""
+        return (
+            "Write UTF-8 text to a file inside the OSA workspace. "
+            "Existing files require overwrite=true."
+        )
+
+    @property
+    def parameters(self) -> Mapping[str, Any]:
+        """Return the JSON schema for tool arguments."""
+        return {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "Workspace-relative file path."
+                    ),
+                },
+                "content": {
+                    "type": "string",
+                    "description": (
+                        "UTF-8 text content to write."
+                    ),
+                },
+                "overwrite": {
+                    "type": "boolean",
+                    "description": (
+                        "Allow replacing an existing file."
+                    ),
+                    "default": False,
+                },
+            },
+            "required": [
+                "path",
+                "content",
+            ],
+            "additionalProperties": False,
+        }
+
+    def execute(
+        self,
+        arguments: Mapping[str, Any],
+    ) -> ToolResult:
+        """Write a UTF-8 text file."""
+        path = arguments.get("path")
+        content = arguments.get("content")
+        overwrite = arguments.get(
+            "overwrite",
+            False,
+        )
+
+        if not isinstance(path, str):
+            return ToolResult(
+                success=False,
+                error="Argument 'path' must be a string.",
+            )
+
+        if not isinstance(content, str):
+            return ToolResult(
+                success=False,
+                error="Argument 'content' must be a string.",
+            )
+
+        if not isinstance(overwrite, bool):
+            return ToolResult(
+                success=False,
+                error="Argument 'overwrite' must be a boolean.",
+            )
+
+        try:
+            characters_written = self._filesystem.write_file(
+                path,
+                content,
+                overwrite=overwrite,
+            )
+        except (
+            FilesystemToolError,
+            FileExistsError,
+            IsADirectoryError,
+            OSError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            return ToolResult(
+                success=False,
+                error=str(exc),
+            )
+
+        return ToolResult(
+            success=True,
+            output=(
+                f"File written successfully: {path} "
+                f"({characters_written} characters)."
+            ),
+            metadata={
+                "path": path,
+                "characters_written": characters_written,
+                "overwritten": overwrite,
+            },
         )

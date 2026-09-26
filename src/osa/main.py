@@ -22,6 +22,7 @@ from osa.permissions import (
     PermissionPolicy,
 )
 from osa.tools import (
+    WriteFileTool,
     CalculatorTool,
     FileExistsTool,
     ForgetTool,
@@ -60,6 +61,10 @@ Long-term memory rules:
 Automatic memory may save stable, useful user or project facts.
 Transient events, questions, commands, secrets, credentials, and sensitive
 personal identifiers should not be treated as long-term memory.
+
+- The write_file tool can modify files only inside the OSA workspace.
+- Writing a file requires user confirmation.
+- Existing files must not be overwritten unless overwrite=true.
 """
 
 
@@ -108,7 +113,9 @@ def create_agent() -> Agent:
     tool_registry.register(
         FileExistsTool(workspace)
     )
-
+    tool_registry.register(
+        WriteFileTool(workspace)
+    )
     memory = LongTermMemory(
         Path.cwd() / "data" / "osa-memory.db"
     )
@@ -142,6 +149,7 @@ def create_agent() -> Agent:
         {
             "calculator": PermissionLevel.ALLOW,
             "list_directory": PermissionLevel.ALLOW,
+            "write_file": PermissionLevel.CONFIRM,
             "read_file": PermissionLevel.ALLOW,
             "file_exists": PermissionLevel.ALLOW,
             "remember": PermissionLevel.ALLOW,
