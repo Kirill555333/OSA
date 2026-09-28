@@ -1,9 +1,61 @@
+import platform
+
+import pytest
+
 from osa.system import (
     MacOSSystemProvider,
     SystemProvider,
     WindowsSystemProvider,
 )
 from osa.tools import SystemInfoTool
+
+
+def test_create_system_provider_selects_macos(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from osa.system import create_system_provider
+
+    monkeypatch.setattr(
+        platform,
+        "system",
+        lambda: "Darwin",
+    )
+
+    assert isinstance(
+        create_system_provider(),
+        MacOSSystemProvider,
+    )
+
+
+def test_create_system_provider_selects_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from osa.system import create_system_provider
+
+    monkeypatch.setattr(
+        platform,
+        "system",
+        lambda: "Windows",
+    )
+
+    assert isinstance(
+        create_system_provider(),
+        WindowsSystemProvider,
+    )
+
+
+def test_create_system_provider_uses_generic_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from osa.system import create_system_provider
+
+    monkeypatch.setattr(
+        platform,
+        "system",
+        lambda: "Linux",
+    )
+
+    assert type(create_system_provider()) is SystemProvider
 
 
 def test_system_provider_returns_basic_information() -> None:

@@ -62,7 +62,6 @@ class Agent:
         memory_integration: MemoryIntegration | None = None,
         mode: AgentMode | str = AgentMode.CHAT,
         mode_policy: AgentModePolicy | None = None,
-        autonomous_loop: AutonomousLoop | None = None,
         automatic_memory: AutomaticMemory | None = None,
         recovery: ErrorRecovery | None = None,
     ) -> None:
@@ -102,7 +101,6 @@ class Agent:
         self._memory_integration = memory_integration
         self._mode_policy = mode_policy or AgentModePolicy()
         self._mode = self._normalize_mode(mode)
-        self._autonomous_loop = autonomous_loop
         self._recovery = (
             recovery
             or ErrorRecovery(
@@ -423,23 +421,6 @@ class Agent:
             memory_id=result.memory_id,
             reason=result.reason,
         )
-
-    def run_autonomous(
-        self,
-        goal: str,
-    ) -> AutonomousRunReport:
-        """Run a goal through the configured autonomous loop."""
-        if self._mode != AgentMode.AUTONOMOUS:
-            raise AgentError(
-                "Autonomous execution requires AUTONOMOUS mode."
-            )
-
-        if self._autonomous_loop is None:
-            raise AgentError(
-                "Autonomous execution is not configured."
-            )
-
-        return self._autonomous_loop.run(goal)
 
     def execute_tool(
         self,

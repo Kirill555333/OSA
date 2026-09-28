@@ -1,3 +1,4 @@
+from osa.tools.browser import BrowserFetchTool
 """Tool layer for OSA."""
 
 from osa.tools.calculator import CalculatorTool
@@ -23,6 +24,8 @@ from osa.tools.registry import (
 )
 
 __all__ = [
+    "WebResearchTool",
+    "BrowserFetchTool",
     "CalculatorTool",
     "FileExistsTool",
     "FilesystemToolError",
@@ -39,3 +42,5 @@ __all__ = [
     "ToolResult",
     "WriteFileTool",
 ]
+
+from osa.tools.research import WebResearchTool

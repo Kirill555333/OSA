@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any, Literal, Mapping
 
@@ -72,6 +73,15 @@ class ModelResponse:
     tool_calls: tuple[ToolCall, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class ModelStreamEvent:
+    """One normalized event produced during model streaming."""
+
+    content: str = ""
+    tool_calls: tuple[ToolCall, ...] = ()
+    finish_reason: str | None = None
+
+
 class ModelInterface(ABC):
     """Abstract interface implemented by every OSA language model backend."""
 
@@ -85,6 +95,36 @@ class ModelInterface(ABC):
     def generate(self, request: ModelRequest) -> ModelResponse:
         """Generate a response from the supplied conversation."""
         raise NotImplementedError
+
+    def generate_stream(
+        self,
+        request: ModelRequest,
+    ) -> Iterator[str]:
+        """Generate response text incrementally when supported."""
+        for event in self.generate_stream_events(request):
+            if event.content:
+                yield event.content
+
+    def generate_stream_events(
+        self,
+        request: ModelRequest,
+    ) -> Iterator[ModelStreamEvent]:
+        """Generate normalized text and tool-call events incrementally."""
+        if request.tools:
+            response = self.generate(request)
+
+            yield ModelStreamEvent(
+                content=response.content,
+                tool_calls=response.tool_calls,
+                finish_reason=response.finish_reason,
+            )
+            return
+
+        for chunk in self.generate_stream(request):
+            if chunk:
+                yield ModelStreamEvent(
+                    content=chunk
+                )
 
     @abstractmethod
     def health_check(self) -> bool:

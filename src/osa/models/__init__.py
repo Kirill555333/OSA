@@ -7,6 +7,7 @@ from osa.models.interface import (
     ModelInterface,
     ModelRequest,
     ModelResponse,
+    ModelStreamEvent,
     ModelResponseError,
     ToolCall,
     ToolDefinition,

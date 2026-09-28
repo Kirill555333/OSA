@@ -7,6 +7,7 @@ from pathlib import Path
 
 from osa.recovery import ErrorRecovery
 from osa.core import Agent, AgentError
+from osa.browser import HttpBrowser
 from osa.memory import (
     AutomaticMemory,
     LongTermMemory,
@@ -18,12 +19,21 @@ from osa.models import (
     LlamaCppModel,
     ModelConnectionError,
 )
+from osa.system import create_system_provider
 from osa.permissions import (
     ConfirmationHandler,
     PermissionLevel,
     PermissionPolicy,
 )
+from osa.research import (
+    DuckDuckGoHtmlSearch,
+    ResearchLoop,
+    WebResearcher,
+)
+
 from osa.tools import (
+    WebResearchTool,
+    BrowserFetchTool,
     SystemInfoTool,
     WriteFileTool,
     CalculatorTool,
@@ -102,6 +112,21 @@ def create_agent() -> Agent:
 
     tool_registry = ToolRegistry()
 
+    browser = HttpBrowser()
+    search = DuckDuckGoHtmlSearch(browser)
+    research_loop = ResearchLoop(
+        WebResearcher(
+            browser=browser,
+            search=search,
+        )
+    )
+
+    tool_registry.register(
+        BrowserFetchTool(browser)
+    )
+    tool_registry.register(
+        WebResearchTool(research_loop),
+    )
     tool_registry.register(
         CalculatorTool()
     )
@@ -123,7 +148,7 @@ def create_agent() -> Agent:
         WriteFileTool(workspace)
     )
     tool_registry.register(
-        SystemInfoTool()
+        SystemInfoTool(create_system_provider())
     )
     memory = LongTermMemory(
         Path.cwd() / "data" / "osa-memory.db"
@@ -157,6 +182,8 @@ def create_agent() -> Agent:
     permission_policy = PermissionPolicy(
         {
             "calculator": PermissionLevel.ALLOW,
+            "browser_fetch": PermissionLevel.ALLOW,
+            "web_research": PermissionLevel.ALLOW,
             "list_directory": PermissionLevel.ALLOW,
             "write_file": PermissionLevel.CONFIRM,
             "read_file": PermissionLevel.ALLOW,
@@ -214,7 +241,7 @@ def run_chat() -> None:
             "http://127.0.0.1:8080."
         )
 
-    print("OSA v0.2.3")
+    print("OSA v0.2.122")
     print(f"Local model: {agent.model.model_name}")
 
     print_tools(agent)
@@ -244,20 +271,31 @@ def run_chat() -> None:
             print("OSA stopped.")
             break
 
+        print(
+            "OSA: ",
+            end="",
+            flush=True,
+        )
+
         try:
-            response = agent.chat(
+            for chunk in agent.chat_stream(
                 user_input
-            )
+            ):
+                print(
+                    chunk,
+                    end="",
+                    flush=True,
+                )
+
         except AgentError as exc:
+            print()
             print(
                 f"OSA error: {exc}"
             )
             print()
             continue
 
-        print(
-            f"OSA: {response.content}"
-        )
+        print()
         print()
 
 

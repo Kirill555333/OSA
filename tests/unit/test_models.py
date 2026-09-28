@@ -1,3 +1,5 @@
+import http.client
+
 import pytest
 
 from osa.models.interface import (
@@ -69,6 +71,143 @@ def test_llama_cpp_config_builds_urls() -> None:
 
     assert config.chat_url == "http://localhost:9000/v1/chat/completions"
     assert config.health_url == "http://localhost:9000/health"
+
+
+def test_llama_cpp_reuses_http_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeResponse:
+        status = 200
+
+        def read(self) -> bytes:
+            return (
+                b'{"choices":[{"message":{"content":"ok"}}]}'
+            )
+
+        def close(self) -> None:
+            pass
+
+    class FakeConnection:
+        instances: list["FakeConnection"] = []
+
+        def __init__(
+            self,
+            host: str,
+            port: int | None = None,
+            *,
+            timeout: float | object = object(),
+        ) -> None:
+            self.requests: list[tuple[str, str]] = []
+            self.responses = 0
+            FakeConnection.instances.append(self)
+
+        def request(
+            self,
+            method: str,
+            target: str,
+            *,
+            body: bytes | None = None,
+            headers: dict[str, str] | None = None,
+        ) -> None:
+            self.requests.append((method, target))
+
+        def getresponse(self) -> FakeResponse:
+            self.responses += 1
+            return FakeResponse()
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        http.client,
+        "HTTPConnection",
+        FakeConnection,
+    )
+
+    model = LlamaCppModel()
+
+    request_data = ModelRequest(
+        messages=(
+            ChatMessage(
+                role="user",
+                content="Hello",
+            ),
+        )
+    )
+
+    model.generate(request_data)
+    model.generate(request_data)
+
+    assert len(FakeConnection.instances) == 1
+    assert FakeConnection.instances[0].responses == 2
+
+
+def test_llama_cpp_reconnects_after_broken_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeResponse:
+        status = 200
+
+        def read(self) -> bytes:
+            return (
+                b'{"choices":[{"message":{"content":"ok"}}]}'
+            )
+
+        def close(self) -> None:
+            pass
+
+    class FakeConnection:
+        instances: list["FakeConnection"] = []
+
+        def __init__(
+            self,
+            host: str,
+            port: int | None = None,
+            *,
+            timeout: float | object = object(),
+        ) -> None:
+            self.failed = False
+            FakeConnection.instances.append(self)
+
+        def request(
+            self,
+            method: str,
+            target: str,
+            *,
+            body: bytes | None = None,
+            headers: dict[str, str] | None = None,
+        ) -> None:
+            if len(FakeConnection.instances) == 1 and not self.failed:
+                self.failed = True
+                raise ConnectionError("broken connection")
+
+        def getresponse(self) -> FakeResponse:
+            return FakeResponse()
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        http.client,
+        "HTTPConnection",
+        FakeConnection,
+    )
+
+    model = LlamaCppModel()
+
+    request_data = ModelRequest(
+        messages=(
+            ChatMessage(
+                role="user",
+                content="Hello",
+            ),
+        )
+    )
+
+    response = model.generate(request_data)
+
+    assert response.content == "ok"
+    assert len(FakeConnection.instances) == 2
 
 
 def test_model_registry() -> None:
