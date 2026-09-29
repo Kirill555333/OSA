@@ -7,6 +7,11 @@ from collections.abc import Iterator
 import time
 from typing import Any, Mapping
 
+from osa.actions.contracts import ActionRequest
+from osa.core.agent_recovery import (
+    AgentRecoveryIntegration,
+    AgentRecoveryIntegrationError,
+)
 from osa.core.context import ConversationContext
 from osa.core.modes import (
     AgentMode,
@@ -22,6 +27,7 @@ from osa.tasks.autonomous import (
 )
 from osa.recovery import ErrorRecovery, RecoveryConfig
 from osa.memory.automatic import AutomaticMemory
+from osa.recovery_contracts import RecoveryResult
 
 from osa.models import (
     ChatMessage,
@@ -69,6 +75,7 @@ class Agent:
         autonomous_loop: AutonomousLoop | None = None,
         automatic_memory: AutomaticMemory | None = None,
         recovery: ErrorRecovery | None = None,
+        recovery_integration: AgentRecoveryIntegration | None = None,
     ) -> None:
         if not 0.0 <= temperature <= 2.0:
             raise ValueError(
@@ -117,6 +124,7 @@ class Agent:
             )
         )
         self._automatic_memory = automatic_memory
+        self._recovery_integration = recovery_integration
 
     @property
     def mode(self) -> AgentMode:
@@ -160,6 +168,42 @@ class Agent:
     def permissions(self) -> PermissionPolicy:
         """Return the permission policy used by the agent."""
         return self._permission_policy
+
+    @property
+    def recovery_integration(
+        self,
+    ) -> AgentRecoveryIntegration | None:
+        """Return the optional unified recovery integration."""
+        return self._recovery_integration
+
+    def execute_action_with_recovery(
+        self,
+        request: ActionRequest,
+        *,
+        run_id: str | None = None,
+        task_id: str | None = None,
+    ) -> RecoveryResult:
+        """
+        Execute an action through the unified recovery pipeline.
+
+        This explicit API is opt-in. Existing chat/tool execution continues
+        to use the legacy path until the later cross-layer integration step.
+        """
+        if self._recovery_integration is None:
+            raise AgentError(
+                "Unified recovery integration is not configured."
+            )
+
+        try:
+            return self._recovery_integration.execute(
+                request,
+                run_id=run_id,
+                task_id=task_id,
+            )
+        except AgentRecoveryIntegrationError as exc:
+            raise AgentError(
+                str(exc)
+            ) from exc
 
     def chat(self, user_input: str) -> ModelResponse:
         """Process a user message, including memory and tool calls."""
@@ -215,6 +259,7 @@ class Agent:
             )
 
             raise
+
     def chat_stream(
         self,
         user_input: str,
@@ -599,6 +644,7 @@ class Agent:
                 raise AgentError(
                     f"Model request failed: {exc}"
                 ) from exc
+
             self._log(
                 "model.response",
                 duration_ms=self._duration_ms(started_at),
