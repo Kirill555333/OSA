@@ -298,6 +298,32 @@ def test_agent_voice_action_adapter_rejects_invalid_request():
     assert agent.recovery_calls == []
 
 
+def test_agent_voice_action_adapter_uses_action_result_output():
+    from osa.actions import ActionResult
+
+    class ActionResultAgent(FakeRecoveringAgent):
+        def __init__(self) -> None:
+            super().__init__(
+                RecoveryResult.succeeded(
+                    result=ActionResult.succeeded(
+                        "req-action",
+                        "executed",
+                    )
+                )
+            )
+
+    adapter = AgentVoiceActionAdapter(
+        ActionResultAgent(),
+        FakeVoiceResolver(),
+    )
+
+    result = adapter.chat(
+        "run action",
+    )
+
+    assert result.content == "executed"
+
+
 def test_agent_voice_action_adapter_formats_non_string_result():
     agent = FakeRecoveringAgent(
         RecoveryResult.succeeded(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
 from osa.actions.contracts import ActionRequest
@@ -44,8 +44,14 @@ class DefaultActionResultClassifier:
     Conservative classifier for ActionResult-like objects.
 
     A valid result must expose a boolean ``success`` attribute.
-    Failed results are classified as BACKEND_ERROR unless a custom
-    classifier is supplied by the integration caller.
+
+    Generic failed results are classified as BACKEND_ERROR.
+
+    Unified ActionSafetyPipeline failures preserve their semantic safety
+    category when the pipeline exposes its stable metadata:
+    - permission + denied -> PERMISSION_DENIED
+    - confirmation + not_confirmed -> CONFIRMATION_DENIED
+    - policy/configuration denials -> NON_RETRYABLE
     """
 
     def __call__(
@@ -86,15 +92,19 @@ class DefaultActionResultClassifier:
         ):
             error = str(error)
 
+        failure_kind = (
+            None
+            if success
+            else self._failure_kind(
+                result
+            )
+        )
+
         return RecoveryAttempt(
             attempt=request.attempt,
             max_attempts=request.max_attempts,
             success=success,
-            failure_kind=(
-                None
-                if success
-                else RecoveryFailureKind.BACKEND_ERROR
-            ),
+            failure_kind=failure_kind,
             error=(
                 None
                 if success
@@ -107,6 +117,59 @@ class DefaultActionResultClassifier:
                 output is not None
             ),
         )
+
+    @staticmethod
+    def _failure_kind(
+        result: Any,
+    ) -> RecoveryFailureKind:
+        """Map stable unified pipeline metadata to recovery semantics."""
+        metadata = getattr(
+            result,
+            "metadata",
+            None,
+        )
+
+        if not isinstance(
+            metadata,
+            Mapping,
+        ):
+            return RecoveryFailureKind.BACKEND_ERROR
+
+        stage = metadata.get(
+            "pipeline_stage"
+        )
+        code = metadata.get(
+            "pipeline_error"
+        )
+
+        if (
+            stage == "permission"
+            and code == "denied"
+        ):
+            return RecoveryFailureKind.PERMISSION_DENIED
+
+        if (
+            stage == "confirmation"
+            and code == "not_confirmed"
+        ):
+            return RecoveryFailureKind.CONFIRMATION_DENIED
+
+        if stage in {
+            "mode",
+            "safety",
+            "confirmation",
+        }:
+            return RecoveryFailureKind.NON_RETRYABLE
+
+        if code in {
+            "policy_exception",
+            "invalid_policy_result",
+            "confirmation_not_configured",
+            "confirmation_exception",
+        }:
+            return RecoveryFailureKind.NON_RETRYABLE
+
+        return RecoveryFailureKind.BACKEND_ERROR
 
 
 class RecoverableActionExecutor:

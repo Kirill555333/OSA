@@ -9,9 +9,9 @@ from typing import Any, Protocol
 from uuid import uuid4
 
 from osa.actions.contracts import (
-    ActionKind,
     ActionRequest,
 )
+from osa.actions.contracts import ActionKind
 from osa.recovery_contracts import RecoveryResult
 from osa.tasks.action import (
     Task,
@@ -60,9 +60,9 @@ class TaskActionResolverVoiceAdapter:
     Adapt the existing TaskActionResolver to voice commands.
 
     The existing resolver remains responsible for model-based action
-    selection and tool validation. This adapter only supplies the Task
-    wrapper required by that existing API and converts the selected
-    TaskAction into an ActionRequest.
+    selection and tool validation. This adapter supplies the Task wrapper
+    required by that existing API and converts the selected TaskAction into
+    an ActionRequest.
     """
 
     def __init__(
@@ -181,8 +181,8 @@ class AgentVoiceActionAdapter:
 
         resolver -> ActionRequest -> Agent.execute_action_with_recovery
 
-    The returned response intentionally exposes `.content`, matching the
-    response contract consumed by VoiceSession.
+    The returned response exposes `.content`, matching the response
+    contract consumed by VoiceSession.
     """
 
     def __init__(
@@ -348,6 +348,36 @@ class AgentVoiceActionAdapter:
             return (
                 normalized
                 if normalized
+                else "Action completed."
+            )
+
+        action_success = getattr(
+            value,
+            "success",
+            None,
+        )
+        action_output = getattr(
+            value,
+            "output",
+            None,
+        )
+
+        if (
+            isinstance(
+                action_success,
+                bool,
+            )
+            and action_success
+            and isinstance(
+                action_output,
+                str,
+            )
+        ):
+            normalized_output = action_output.strip()
+
+            return (
+                normalized_output
+                if normalized_output
                 else "Action completed."
             )
 

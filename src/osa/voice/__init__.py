@@ -108,6 +108,10 @@ from osa.voice.tts import (
     TextToSpeech,
     TextToSpeechError,
 )
+from osa.voice.unified_action import (
+    UnifiedVoiceActionCompositionError,
+    create_unified_voice_session,
+)
 from osa.voice.vad import (
     EnergyVoiceActivityDetector,
     VoiceActivityDetectionError,
@@ -150,6 +154,7 @@ __all__ = [
     "TextToSpeech",
     "TextToSpeechError",
     "UnavailableAudioBackend",
+    "UnifiedVoiceActionCompositionError",
     "VoiceActivationDetector",
     "VoiceActivationError",
     "VoiceActivationResult",
@@ -192,6 +197,7 @@ __all__ = [
     "create_faster_whisper_stt",
     "create_keyword_activation_detector",
     "create_piper_tts",
+    "create_unified_voice_session",
     "create_voice_audio_normalizer",
     "create_voice_runtime",
     "create_voice_runtime_from_backend",

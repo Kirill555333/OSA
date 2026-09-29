@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from osa.core.agent_voice_action import (
     AgentVoiceActionAdapter,
+    TaskActionResolverVoiceAdapter,
 )
 from osa.tasks.action import TaskActionResolver
 from osa.voice.activation import VoiceActivationDetector
@@ -66,9 +67,13 @@ def create_unified_voice_session(
         )
 
     try:
+        resolver = TaskActionResolverVoiceAdapter(
+            task_action_resolver,
+        )
+
         voice_agent = AgentVoiceActionAdapter(
             agent,
-            _TaskResolverAdapter(task_action_resolver),
+            resolver,
         )
     except Exception as exc:
         raise UnifiedVoiceActionCompositionError(
@@ -88,26 +93,6 @@ def create_unified_voice_session(
         raise UnifiedVoiceActionCompositionError(
             f"Unable to create VoiceSession: {exc}"
         ) from exc
-
-
-class _TaskResolverAdapter:
-    """Adapt TaskActionResolver to the generic voice resolver protocol."""
-
-    def __init__(
-        self,
-        resolver: TaskActionResolver,
-    ) -> None:
-        self._resolver = resolver
-
-    def resolve(self, command: str):
-        """Resolve voice text using the existing task action resolver."""
-        from osa.core.agent_voice_action import (
-            TaskActionResolverVoiceAdapter,
-        )
-
-        return TaskActionResolverVoiceAdapter(
-            self._resolver,
-        ).resolve(command)
 
 
 __all__ = [
