@@ -57,10 +57,7 @@ class AutonomousRunReport:
 
         for cycle in self.cycles:
             for result in cycle.results:
-                if (
-                    result.status == "completed"
-                    and result.task_id not in completed
-                ):
+                if result.status == "completed" and result.task_id not in completed:
                     completed.append(result.task_id)
 
         return tuple(completed)
@@ -71,10 +68,7 @@ class AutonomousRunReport:
 
         for cycle in self.cycles:
             for result in cycle.results:
-                if (
-                    result.status == "failed"
-                    and result.task_id not in failed
-                ):
+                if result.status == "failed" and result.task_id not in failed:
                     failed.append(result.task_id)
 
         return tuple(failed)
@@ -100,11 +94,7 @@ class AutonomousBackend(Protocol):
     def ready_task_ids(self, run_id: str) -> Sequence[str]:
         ...
 
-    def execute_task(
-        self,
-        run_id: str,
-        task_id: str,
-    ) -> AutonomousTaskResult:
+    def execute_task(self, run_id: str, task_id: str) -> AutonomousTaskResult:
         ...
 
     def is_complete(self, run_id: str) -> bool:
@@ -192,19 +182,14 @@ class AutonomousLoop:
         normalized_goal = goal.strip()
 
         if not normalized_goal:
-            raise ValueError(
-                "Autonomous goal cannot be empty."
-            )
+            raise ValueError("Autonomous goal cannot be empty.")
 
         self.reset()
 
         run_id = self._backend.create_run(normalized_goal)
         cycles: list[AutonomousCycle] = []
 
-        for cycle_number in range(
-            1,
-            self._config.max_cycles + 1,
-        ):
+        for cycle_number in range(1, self._config.max_cycles + 1):
             if self._stop_event.is_set():
                 return AutonomousRunReport(
                     goal=normalized_goal,
@@ -252,6 +237,7 @@ class AutonomousLoop:
                 )
 
             results: list[AutonomousTaskResult] = []
+            authorization_denied = False
 
             for task_id in ready_ids:
                 if self._stop_event.is_set():
@@ -281,12 +267,10 @@ class AutonomousLoop:
                                 ),
                             )
                         )
+                        authorization_denied = True
                         continue
 
-                result = self._backend.execute_task(
-                    run_id,
-                    task_id,
-                )
+                result = self._backend.execute_task(run_id, task_id)
                 results.append(result)
 
             progressed = any(
@@ -294,14 +278,23 @@ class AutonomousLoop:
                 for result in results
             )
 
-            cycles.append(
-                AutonomousCycle(
-                    cycle=cycle_number,
-                    ready_task_ids=ready_ids,
-                    results=tuple(results),
-                    progressed=progressed,
-                )
+            cycle = AutonomousCycle(
+                cycle=cycle_number,
+                ready_task_ids=ready_ids,
+                results=tuple(results),
+                progressed=progressed,
             )
+            cycles.append(cycle)
+
+            if authorization_denied:
+                return AutonomousRunReport(
+                    goal=normalized_goal,
+                    run_id=run_id,
+                    success=False,
+                    stopped=False,
+                    stop_reason="task_failed",
+                    cycles=tuple(cycles),
+                )
 
             if not progressed:
                 return AutonomousRunReport(
@@ -313,16 +306,14 @@ class AutonomousLoop:
                     cycles=tuple(cycles),
                 )
 
-        complete = self._backend.is_complete(run_id)
-
         return AutonomousRunReport(
             goal=normalized_goal,
             run_id=run_id,
-            success=complete,
+            success=self._backend.is_complete(run_id),
             stopped=False,
             stop_reason=(
                 None
-                if complete
+                if self._backend.is_complete(run_id)
                 else "max_cycles_reached"
             ),
             cycles=tuple(cycles),

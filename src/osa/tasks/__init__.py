@@ -34,7 +34,9 @@ from osa.tasks.verification import (
     VerificationResult,
 )
 
-from osa.tasks.recovery import TaskRecoveryPolicy
+from osa.tasks.recovery import (
+    TaskRecoveryPolicy,
+)
 
 from osa.tasks.runner import (
     create_default_planned_task_runner,
@@ -66,6 +68,32 @@ from osa.tasks.manager import (
     TaskStatus,
 )
 
+from osa.tasks.action_bridge import (
+    AutonomousActionBridge,
+    AutonomousActionBridgeError,
+    AutonomousActionResolver,
+    CallbackAutonomousActionResolver,
+)
+
+from osa.tasks.autonomous_executor import (
+    UnifiedAutonomousExecutor,
+    UnifiedAutonomousExecutorError,
+)
+
+from osa.tasks.unified_safety import (
+    UnifiedAutonomousSafetyError,
+    UnifiedAutonomousTaskAuthorizer,
+)
+
+from osa.tasks.autonomous_recovery import (
+    AutonomousRecoveryDecision,
+    AutonomousRecoveryExecutor,
+    AutonomousRecoveryPolicy,
+    CallbackAutonomousRecoveryPolicy,
+    NeverRetryAutonomousRecoveryPolicy,
+)
+
+
 __all__ = [
     "AllowlistedAutonomousSafetyGate",
     "AutonomousAuthorization",
@@ -78,11 +106,12 @@ __all__ = [
     "AutonomousRunReport",
     "AutonomousTaskResult",
     "CallbackAutonomousBackend",
-    "create_default_task_verifier",
+    "create_default_planned_task_runner",
     "TaskRecoveryPolicy",
     "TaskWorkingMemory",
     "TaskWorkingMemorySnapshot",
     "WorkingMemoryError",
+    "create_default_task_verifier",
     "VerificationResult",
     "TaskVerifierFunction",
     "TaskVerifier",
@@ -104,4 +133,17 @@ __all__ = [
     "TaskManagerError",
     "TaskRun",
     "TaskStatus",
+    "AutonomousActionBridge",
+    "AutonomousActionBridgeError",
+    "AutonomousActionResolver",
+    "CallbackAutonomousActionResolver",
+    "UnifiedAutonomousExecutor",
+    "UnifiedAutonomousExecutorError",
+    "UnifiedAutonomousSafetyError",
+    "UnifiedAutonomousTaskAuthorizer",
+    "AutonomousRecoveryDecision",
+    "AutonomousRecoveryExecutor",
+    "AutonomousRecoveryPolicy",
+    "CallbackAutonomousRecoveryPolicy",
+    "NeverRetryAutonomousRecoveryPolicy",
 ]
