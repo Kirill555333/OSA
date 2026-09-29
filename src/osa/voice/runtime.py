@@ -10,6 +10,10 @@ from osa.voice.audio import (
     MicrophoneInput,
     SpeakerOutput,
 )
+from osa.voice.barge_in import (
+    BargeInConfig,
+    VoiceBargeInMonitor,
+)
 from osa.voice.normalization import (
     VoiceAudioNormalizer,
 )
@@ -36,10 +40,12 @@ class VoiceRuntimeState(str, Enum):
 
 @dataclass(frozen=True)
 class VoiceRuntimeConfig:
-    """Configuration for runtime speaker playback."""
+    """Configuration for runtime speaker playback and barge-in."""
 
     output_sample_rate_hz: int = 16_000
     output_channels: int = 1
+    barge_in_enabled: bool = False
+    barge_in_poll_interval_seconds: float = 0.02
 
     def __post_init__(self) -> None:
         if (
@@ -80,13 +86,40 @@ class VoiceRuntimeConfig:
                 "output_channels must be greater than zero."
             )
 
+        if not isinstance(
+            self.barge_in_enabled,
+            bool,
+        ):
+            raise ValueError(
+                "barge_in_enabled must be boolean."
+            )
+
+        if (
+            isinstance(
+                self.barge_in_poll_interval_seconds,
+                bool,
+            )
+            or not isinstance(
+                self.barge_in_poll_interval_seconds,
+                (int, float),
+            )
+        ):
+            raise ValueError(
+                "barge_in_poll_interval_seconds must be numeric."
+            )
+
+        if self.barge_in_poll_interval_seconds <= 0:
+            raise ValueError(
+                "barge_in_poll_interval_seconds must be greater than zero."
+            )
+
 
 class VoiceRuntime:
     """
     Bridge VoiceSession with actual microphone and speaker devices.
 
     The runtime owns device lifecycle and audio normalization. VoiceSession
-    remains responsible for VAD, STT, Agent, TTS, and voice state semantics.
+    remains responsible for VAD, activation, STT, Agent, TTS, and voice state.
     """
 
     def __init__(
@@ -161,6 +194,20 @@ class VoiceRuntime:
         self._state = VoiceRuntimeState.STOPPED
         self._lock = RLock()
 
+        self._barge_in_monitor: VoiceBargeInMonitor | None = None
+
+        if self._config.barge_in_enabled:
+            self._barge_in_monitor = VoiceBargeInMonitor(
+                self._microphone,
+                self._session.vad,
+                self.interrupt,
+                config=BargeInConfig(
+                    poll_interval_seconds=(
+                        self._config.barge_in_poll_interval_seconds
+                    )
+                ),
+            )
+
     @property
     def session(self) -> VoiceSession:
         """Return the configured voice session."""
@@ -185,6 +232,11 @@ class VoiceRuntime:
     def normalizer(self) -> VoiceAudioNormalizer:
         """Return the configured audio normalizer."""
         return self._normalizer
+
+    @property
+    def barge_in_monitor(self) -> VoiceBargeInMonitor | None:
+        """Return the optional barge-in monitor."""
+        return self._barge_in_monitor
 
     @property
     def state(self) -> VoiceRuntimeState:
@@ -217,11 +269,7 @@ class VoiceRuntime:
     def listen_once(
         self,
     ) -> VoiceSessionResult | None:
-        """
-        Read one microphone chunk and process it through VoiceSession.
-
-        Audio normalization happens before VAD and STT.
-        """
+        """Read one microphone chunk and process it through VoiceSession."""
         with self._lock:
             if self._state != VoiceRuntimeState.READY:
                 raise VoiceRuntimeError(
@@ -266,8 +314,8 @@ class VoiceRuntime:
         """
         Normalize TTS output and play it through the speaker.
 
-        WAV payloads from providers such as Piper are unwrapped and converted
-        to the runtime playback format.
+        When barge-in is enabled, microphone monitoring runs concurrently
+        while the speaker is playing.
         """
         if not isinstance(
             result,
@@ -284,6 +332,8 @@ class VoiceRuntime:
                     f"current state is '{self._session.state.value}'."
                 )
             )
+
+        monitor = self._barge_in_monitor
 
         try:
             normalized_output = (
@@ -304,16 +354,21 @@ class VoiceRuntime:
                 )
             )
 
+            if monitor is not None:
+                monitor.start()
+
             self._speaker.play(
                 normalized_output.audio,
                 sample_rate_hz=normalized_output.sample_rate_hz,
                 channels=normalized_output.channels,
             )
 
-            self._session.complete_speaking()
+            if self._session.state.value == "speaking":
+                self._session.complete_speaking()
 
             with self._lock:
-                self._state = VoiceRuntimeState.READY
+                if self._state != VoiceRuntimeState.ERROR:
+                    self._state = VoiceRuntimeState.READY
 
         except Exception:
             with self._lock:
@@ -321,15 +376,14 @@ class VoiceRuntime:
 
             raise
 
+        finally:
+            if monitor is not None:
+                monitor.stop()
+
     def run_once(
         self,
     ) -> VoiceSessionResult | None:
-        """
-        Capture, process, and synchronously play one utterance.
-
-        Non-speech returns None. Speech is sent to the speaker and the
-        VoiceSession returns to idle after successful playback.
-        """
+        """Capture, process, and synchronously play one utterance."""
         result = self.listen_once()
 
         if result is None:
@@ -343,7 +397,7 @@ class VoiceRuntime:
         """
         Stop current voice presentation and speaker playback.
 
-        This operation never modifies the completed Agent result.
+        This method is safe to call from a barge-in monitoring thread.
         """
         try:
             if self._session.state.value == "speaking":
@@ -364,6 +418,9 @@ class VoiceRuntime:
     def reset(self) -> None:
         """Reset the session and return the runtime to READY."""
         try:
+            if self._barge_in_monitor is not None:
+                self._barge_in_monitor.reset()
+
             self._speaker.stop()
             self._session.reset()
 
@@ -376,6 +433,49 @@ class VoiceRuntime:
 
             raise
 
+    def stop_capture(self) -> None:
+        """Stop microphone capture and speaker playback reversibly."""
+        speaker_error: Exception | None = None
+        microphone_error: Exception | None = None
+
+        try:
+            if self._barge_in_monitor is not None:
+                self._barge_in_monitor.stop()
+
+            if self._session.state.value == "speaking":
+                self._session.interrupt()
+        except Exception as exc:
+            speaker_error = exc
+
+        try:
+            self._speaker.stop()
+        except Exception as exc:
+            if speaker_error is None:
+                speaker_error = exc
+
+        try:
+            self._microphone.stop()
+        except Exception as exc:
+            microphone_error = exc
+
+        with self._lock:
+            self._state = (
+                VoiceRuntimeState.ERROR
+                if (
+                    speaker_error is not None
+                    or microphone_error is not None
+                )
+                else VoiceRuntimeState.STOPPED
+            )
+
+        first_error = (
+            speaker_error
+            or microphone_error
+        )
+
+        if first_error is not None:
+            raise first_error
+
     def stop(self) -> None:
         """Stop speaker playback, microphone capture, and voice session."""
         microphone_error: Exception | None = None
@@ -383,6 +483,9 @@ class VoiceRuntime:
         session_error: Exception | None = None
 
         try:
+            if self._barge_in_monitor is not None:
+                self._barge_in_monitor.stop()
+
             self._speaker.stop()
         except Exception as exc:
             speaker_error = exc

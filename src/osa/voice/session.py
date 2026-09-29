@@ -1,10 +1,14 @@
-"""Voice session orchestration for OSA 0.6.x."""
+"""Voice session orchestration for OSA 0.7.x."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
+from osa.voice.activation import (
+    AlwaysActiveVoiceActivationDetector,
+    VoiceActivationDetector,
+)
 from osa.voice.contracts import (
     VoiceInput,
     VoiceOutput,
@@ -51,10 +55,10 @@ class VoiceSessionResult:
 
 class VoiceSession:
     """
-    Coordinate VAD, STT, Agent, and TTS.
+    Coordinate VAD, STT, activation, Agent, and TTS.
 
-    Audio capture and playback remain outside this layer. The session only
-    coordinates the voice lifecycle and exposes a safe interruption boundary.
+    Activation is evaluated after transcription and before Agent.chat().
+    The default detector is AlwaysActive, preserving existing behavior.
     """
 
     def __init__(
@@ -65,6 +69,7 @@ class VoiceSession:
         tts: TextToSpeech,
         *,
         config: VoiceSessionConfig | None = None,
+        activation_detector: VoiceActivationDetector | None = None,
     ) -> None:
         if agent is None:
             raise ValueError(
@@ -118,6 +123,14 @@ class VoiceSession:
                 "tts must provide synthesize() and stop() methods."
             )
 
+        if activation_detector is not None and not isinstance(
+            activation_detector,
+            VoiceActivationDetector,
+        ):
+            raise TypeError(
+                "activation_detector must provide detect()."
+            )
+
         self._agent = agent
         self._vad = vad
         self._stt = stt
@@ -126,6 +139,11 @@ class VoiceSession:
             config
             if config is not None
             else VoiceSessionConfig()
+        )
+        self._activation_detector = (
+            activation_detector
+            if activation_detector is not None
+            else AlwaysActiveVoiceActivationDetector()
         )
         self._state = VoiceSessionState.IDLE
 
@@ -155,6 +173,13 @@ class VoiceSession:
         return self._config
 
     @property
+    def activation_detector(
+        self,
+    ) -> VoiceActivationDetector:
+        """Return the configured activation detector."""
+        return self._activation_detector
+
+    @property
     def state(self) -> VoiceSessionState:
         """Return the current session state."""
         return self._state
@@ -169,14 +194,12 @@ class VoiceSession:
         """
         Process one complete audio chunk.
 
-        Non-speech returns None and leaves the session idle.
+        Non-speech and non-activated speech both return None and leave the
+        session idle.
 
         Speech follows:
 
             IDLE -> LISTENING -> PROCESSING -> SPEAKING
-
-        SPEAKING remains active until playback is explicitly completed or
-        interrupted.
         """
         self._require_state(
             VoiceSessionState.IDLE
@@ -207,8 +230,21 @@ class VoiceSession:
                 voice_input
             )
 
+            activation = self._activation_detector.detect(
+                transcript
+            )
+
+            if not activation.activated:
+                self._state = VoiceSessionState.IDLE
+                return None
+
+            command_text = (
+                activation.command_text
+                or transcript.text
+            )
+
             response = self._agent.chat(
-                transcript.text
+                command_text
             )
 
             response_text = self._extract_response_text(

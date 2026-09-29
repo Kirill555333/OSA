@@ -1,5 +1,14 @@
 """Public voice API for OSA 0.7.x."""
 
+from osa.voice.activation import (
+    AlwaysActiveVoiceActivationDetector,
+    KeywordVoiceActivationDetector,
+    VoiceActivationDetector,
+    VoiceActivationError,
+    VoiceActivationResult,
+    create_always_active_detector,
+    create_keyword_activation_detector,
+)
 from osa.voice.audio import (
     AudioInputError,
     AudioOutputError,
@@ -9,6 +18,13 @@ from osa.voice.audio import (
     SpeakerOutput,
     create_fake_microphone,
     create_fake_speaker,
+)
+from osa.voice.barge_in import (
+    BargeInConfig,
+    BargeInError,
+    BargeInState,
+    VoiceBargeInMonitor,
+    create_barge_in_monitor,
 )
 from osa.voice.composition import (
     VoiceCompositionError,
@@ -99,6 +115,7 @@ from osa.voice.vad import (
 )
 
 __all__ = [
+    "AlwaysActiveVoiceActivationDetector",
     "AudioBackend",
     "AudioInputError",
     "AudioNormalizationConfig",
@@ -107,6 +124,9 @@ __all__ = [
     "AudioPlatform",
     "AudioPlatformError",
     "AudioPlatformUnavailableError",
+    "BargeInConfig",
+    "BargeInError",
+    "BargeInState",
     "BufferedSpeechToTextStream",
     "ChunkedTextToSpeechStream",
     "DesktopAudioBackendFactory",
@@ -117,6 +137,7 @@ __all__ = [
     "FixedTextToSpeech",
     "FasterWhisperConfig",
     "FasterWhisperSpeechToText",
+    "KeywordVoiceActivationDetector",
     "MicrophoneInput",
     "NormalizedAudio",
     "PiperTTSConfig",
@@ -129,10 +150,14 @@ __all__ = [
     "TextToSpeech",
     "TextToSpeechError",
     "UnavailableAudioBackend",
+    "VoiceActivationDetector",
+    "VoiceActivationError",
+    "VoiceActivationResult",
     "VoiceActivityDetectionError",
     "VoiceActivityDetector",
     "VoiceAgent",
     "VoiceAudioNormalizer",
+    "VoiceBargeInMonitor",
     "VoiceCompositionError",
     "VoiceContractError",
     "VoiceInput",
@@ -155,17 +180,20 @@ __all__ = [
     "VoiceStreamingState",
     "VoiceTranscript",
     "create_audio_backend_factory",
+    "create_always_active_detector",
+    "create_barge_in_monitor",
+    "create_buffered_stt_stream",
+    "create_chunked_tts_stream",
     "create_default_audio_backend",
     "create_default_voice_provider_config",
     "create_default_voice_runtime",
     "create_fake_microphone",
     "create_fake_speaker",
     "create_faster_whisper_stt",
+    "create_keyword_activation_detector",
     "create_piper_tts",
     "create_voice_audio_normalizer",
     "create_voice_runtime",
     "create_voice_runtime_from_backend",
-    "create_buffered_stt_stream",
-    "create_chunked_tts_stream",
     "load_voice_provider_config",
 ]
