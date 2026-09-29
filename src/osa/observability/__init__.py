@@ -32,6 +32,10 @@ from osa.observability.logger import (
     ObservabilityLogger,
     ObservabilityLoggerError,
 )
+from osa.observability.recovery import (
+    ObservableAutonomousRecovery,
+    RecoveryObservabilityError,
+)
 
 __all__ = [
     "ActionPipelineLike",
@@ -54,4 +58,6 @@ __all__ = [
     "NullObservabilityLogger",
     "ObservabilityLogger",
     "ObservabilityLoggerError",
+    "ObservableAutonomousRecovery",
+    "RecoveryObservabilityError",
 ]
