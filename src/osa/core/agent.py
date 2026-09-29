@@ -237,108 +237,24 @@ class Agent:
         run_id: str | None = None,
         task_id: str | None = None,
     ) -> RecoveryResult:
-        """
-        Execute an action through the unified recovery pipeline.
-
-        The explicit public API remains recovery-authoritative while sharing
-        the same passive action observability lifecycle as Agent tool rounds.
-        """
+        """Execute an action through the shared unified action core."""
         if self._recovery_integration is None:
             raise AgentError(
                 "Unified recovery integration is not configured."
             )
 
-        round_number = request.metadata.get(
-            "round"
-        )
-
-        if not isinstance(
-            round_number,
-            int,
-        ):
-            round_number = None
-
-        self._observability.action_requested(
+        _, recovery_result = self._execute_action_core(
             request,
-            round_number=round_number,
+            run_id=run_id,
+            task_id=task_id,
         )
 
-        max_attempts = getattr(
-            self._recovery_integration.executor,
-            "max_attempts",
-            None,
-        )
-
-        if not isinstance(
-            max_attempts,
-            int,
-        ) or max_attempts < 1:
-            max_attempts = 1
-
-        self._observability.recovery_started(
-            request,
-            max_attempts=max_attempts,
-            round_number=round_number,
-        )
-
-        try:
-            result = self._recovery_integration.execute(
-                request,
-                run_id=run_id,
-                task_id=task_id,
-            )
-        except AgentRecoveryIntegrationError as exc:
-            failure_result = ActionResult.failed(
-                request.request_id,
-                str(exc),
-            )
-
-            self._observability.action_completed(
-                request,
-                failure_result,
-                recovery=None,
-                round_number=round_number,
-            )
-
+        if recovery_result is None:
             raise AgentError(
-                str(exc)
-            ) from exc
-
-        self._observability.recovery_completed(
-            request,
-            result,
-            round_number=round_number,
-        )
-
-        underlying = result.result
-
-        if isinstance(
-            underlying,
-            ActionResult,
-        ):
-            self._log_action_outcome(
-                request,
-                underlying,
-                recovery=result,
-                round_number=round_number,
+                "Unified action core returned no recovery result."
             )
 
-            return result
-
-        failure_result = ActionResult.failed(
-            request.request_id,
-            result.error
-            or "Unified recovery returned an invalid action result.",
-        )
-
-        self._observability.action_completed(
-            request,
-            failure_result,
-            recovery=result,
-            round_number=round_number,
-        )
-
-        return result
+        return recovery_result
 
     def chat(self, user_input: str) -> ModelResponse:
         """Process a user message, including memory and tool calls."""
@@ -698,11 +614,14 @@ class Agent:
                 str(exc)
             ) from exc
 
-    def _execute_action_request(
+    def _execute_action_core(
         self,
         request: ActionRequest,
-    ) -> ToolResult:
-        """Execute one TOOL ActionRequest through unified infrastructure."""
+        *,
+        run_id: str | None = None,
+        task_id: str | None = None,
+    ) -> tuple[ActionResult | None, RecoveryResult | None]:
+        """Execute one ActionRequest through the single internal core."""
         round_number = request.metadata.get(
             "round"
         )
@@ -718,8 +637,6 @@ class Agent:
             round_number=round_number,
         )
 
-        recovery_result: RecoveryResult | None = None
-
         if self._recovery_integration is None:
             action_result = self._action_safety_pipeline.dispatch(
                 request
@@ -731,172 +648,183 @@ class Agent:
                 round_number=round_number,
             )
 
-            self._raise_for_action_denial(
-                action_result,
-                None,
-            )
-        else:
-            max_attempts = getattr(
-                self._recovery_integration.executor,
-                "max_attempts",
-                None,
-            )
+            return action_result, None
 
-            if not isinstance(max_attempts, int) or max_attempts < 1:
-                max_attempts = 1
+        max_attempts = getattr(
+            self._recovery_integration.executor,
+            "max_attempts",
+            None,
+        )
 
-            self._observability.recovery_started(
+        if not isinstance(
+            max_attempts,
+            int,
+        ) or max_attempts < 1:
+            max_attempts = 1
+
+        self._observability.recovery_started(
+            request,
+            max_attempts=max_attempts,
+            round_number=round_number,
+        )
+
+        try:
+            recovery_result = self._recovery_integration.execute(
                 request,
-                max_attempts=max_attempts,
+                run_id=run_id,
+                task_id=task_id,
+            )
+        except AgentRecoveryIntegrationError as exc:
+            failure_result = ActionResult.failed(
+                request.request_id,
+                str(exc),
+            )
+
+            self._observability.action_completed(
+                request,
+                failure_result,
+                recovery=None,
                 round_number=round_number,
             )
 
-            try:
-                recovery_result = self._recovery_integration.execute(
-                    request
-                )
-            except AgentRecoveryIntegrationError as exc:
-                failure_result = ActionResult.failed(
-                    request.request_id,
-                    str(exc),
-                )
+            raise AgentError(
+                str(exc)
+            ) from exc
 
-                self._observability.action_completed(
-                    request,
-                    failure_result,
-                    recovery=None,
-                    round_number=round_number,
-                )
+        self._observability.recovery_completed(
+            request,
+            recovery_result,
+            round_number=round_number,
+        )
 
-                raise AgentError(
-                    str(exc)
-                ) from exc
+        underlying = recovery_result.result
 
-            if not recovery_result.success:
-                underlying = recovery_result.result
-
-                if isinstance(
-                    underlying,
-                    ActionResult,
-                ):
-                    self._observability.recovery_completed(
-                        request,
-                        recovery_result,
-                        round_number=round_number,
-                    )
-
-                    self._log_action_outcome(
-                        request,
-                        underlying,
-                        recovery=recovery_result,
-                        round_number=round_number,
-                    )
-
-                    self._raise_for_action_denial(
-                        underlying,
-                        recovery_result,
-                    )
-
-                    return self._tool_result_from_action_result(
-                        underlying,
-                        recovery_result,
-                    )
-
-                failure_result = ActionResult.failed(
-                    request.request_id,
-                    recovery_result.error
-                    or "Tool recovery failed.",
-                )
-
-                self._observability.action_completed(
-                    request,
-                    failure_result,
-                    recovery=recovery_result,
-                    round_number=round_number,
-                )
-
-                if recovery_result.failure_kind in {
-                    RecoveryFailureKind.PERMISSION_DENIED,
-                    RecoveryFailureKind.CONFIRMATION_DENIED,
-                }:
-                    self._observability.action_denied(
-                        request,
-                        decision=(
-                            recovery_result.failure_kind.value
-                        ),
-                        reason=recovery_result.error,
-                        round_number=round_number,
-                    )
-
-                    raise PermissionDeniedError(
-                        recovery_result.error
-                        or (
-                            f"Action denied for tool "
-                            f"'{request.name}'."
-                        )
-                    )
-
-                return ToolResult(
-                    success=False,
-                    error=(
-                        recovery_result.error
-                        or "Tool recovery failed."
-                    ),
-                    metadata={
-                        "recovery_failure_kind": (
-                            recovery_result.failure_kind.value
-                            if recovery_result.failure_kind is not None
-                            else None
-                        ),
-                        "recovery_attempts": (
-                            recovery_result.attempt_count
-                        ),
-                    },
-                )
-
-            self._observability.recovery_completed(
-                request,
-                recovery_result,
-                round_number=round_number,
-            )
-
-            if not isinstance(
-                recovery_result.result,
-                ActionResult,
-            ):
-                failure_result = ActionResult.failed(
-                    request.request_id,
-                    "Unified recovery returned an invalid action result.",
-                )
-
-                self._observability.action_completed(
-                    request,
-                    failure_result,
-                    recovery=recovery_result,
-                    round_number=round_number,
-                )
-
-                raise AgentError(
-                    "Unified recovery returned an invalid action result."
-                )
-
-            action_result = recovery_result.result
-
+        if isinstance(
+            underlying,
+            ActionResult,
+        ):
             self._log_action_outcome(
                 request,
-                action_result,
+                underlying,
                 recovery=recovery_result,
                 round_number=round_number,
             )
 
+            return underlying, recovery_result
+
+        if recovery_result.success:
+            failure_message = (
+                recovery_result.error
+                or "Unified recovery returned an invalid action result."
+            )
+        else:
+            failure_message = (
+                recovery_result.error
+                or "Tool recovery failed."
+            )
+
+        failure_result = ActionResult.failed(
+            request.request_id,
+            failure_message,
+        )
+
+        self._observability.action_completed(
+            request,
+            failure_result,
+            recovery=recovery_result,
+            round_number=round_number,
+        )
+
+        return None, recovery_result
+
+    def _execute_action_request(
+        self,
+        request: ActionRequest,
+    ) -> ToolResult:
+        """Project the unified action core into the legacy ToolResult API."""
+        action_result, recovery_result = self._execute_action_core(
+            request
+        )
+
+        round_number = request.metadata.get(
+            "round"
+        )
+
+        if not isinstance(
+            round_number,
+            int,
+        ):
+            round_number = None
+
+        if recovery_result is None:
+            if action_result is None:
+                raise AgentError(
+                    "Unified action core returned no action result."
+                )
+
+            self._raise_for_action_denial(
+                action_result,
+                None,
+            )
+
+            return self._tool_result_from_action_result(
+                action_result,
+                None,
+            )
+
+        if isinstance(
+            action_result,
+            ActionResult,
+        ):
             self._raise_for_action_denial(
                 action_result,
                 recovery_result,
             )
 
-        return self._tool_result_from_action_result(
-            action_result,
-            recovery_result,
+            return self._tool_result_from_action_result(
+                action_result,
+                recovery_result,
+            )
+
+        if recovery_result.success:
+            raise AgentError(
+                "Unified recovery returned an invalid action result."
+            )
+
+        if recovery_result.failure_kind in {
+            RecoveryFailureKind.PERMISSION_DENIED,
+            RecoveryFailureKind.CONFIRMATION_DENIED,
+        }:
+            self._observability.action_denied(
+                request,
+                decision=recovery_result.failure_kind.value,
+                reason=recovery_result.error,
+                round_number=round_number,
+            )
+
+            raise PermissionDeniedError(
+                recovery_result.error
+                or (
+                    f"Action denied for tool '{request.name}'."
+                )
+            )
+
+        return ToolResult(
+            success=False,
+            error=(
+                recovery_result.error
+                or "Tool recovery failed."
+            ),
+            metadata={
+                "recovery_failure_kind": (
+                    recovery_result.failure_kind.value
+                    if recovery_result.failure_kind is not None
+                    else None
+                ),
+                "recovery_attempts": (
+                    recovery_result.attempt_count
+                ),
+            },
         )
 
     def _log_action_outcome(
