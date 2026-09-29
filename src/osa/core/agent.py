@@ -6,11 +6,18 @@ from collections.abc import Iterator
 import time
 from typing import Any, Mapping
 
-from osa.actions.contracts import ActionKind, ActionRequest
+from osa.actions.contracts import (
+    ActionKind,
+    ActionRequest,
+    ActionResult,
+)
 from osa.actions.pipeline import ActionSafetyPipeline
 from osa.actions.router import ActionRouter
 from osa.actions.tool import ToolRegistryActionAdapter
-from osa.core.agent_action import AgentActionBridge, AgentActionBridgeError
+from osa.core.agent_action import (
+    AgentActionBridge,
+    AgentActionBridgeError,
+)
 from osa.core.agent_action_policy import (
     AgentModeActionPolicy,
     LegacyConfirmationActionHandler,
@@ -35,7 +42,10 @@ from osa.tasks.autonomous import (
 )
 from osa.recovery import ErrorRecovery, RecoveryConfig
 from osa.memory.automatic import AutomaticMemory
-from osa.recovery_contracts import RecoveryResult
+from osa.recovery_contracts import (
+    RecoveryFailureKind,
+    RecoveryResult,
+)
 
 from osa.models import (
     ChatMessage,
@@ -46,7 +56,6 @@ from osa.models import (
 )
 from osa.permissions import (
     ConfirmationHandler,
-    PermissionLevel,
     PermissionPolicy,
 )
 from osa.tools import ToolRegistry, ToolResult
@@ -216,8 +225,8 @@ class Agent:
         """
         Execute an action through the unified recovery pipeline.
 
-        This explicit API remains opt-in. Legacy recovery for model requests
-        remains unchanged until the later recovery integration stage.
+        This explicit API remains unchanged and delegates to the configured
+        recovery integration.
         """
         if self._recovery_integration is None:
             raise AgentError(
@@ -279,13 +288,13 @@ class Agent:
 
             return response
 
-        except AgentError:
+        except AgentError as exc:
             self._context.restore(previous_context)
 
             self._log(
                 "agent.chat.failed",
                 duration_ms=self._duration_ms(started_at),
-                error="agent execution failed",
+                error=str(exc),
             )
 
             raise
@@ -529,9 +538,11 @@ class Agent:
         request_id: str | None = None,
     ) -> ToolResult:
         """
-        Execute a registered tool through the unified action pipeline.
+        Execute a registered tool through unified safety and recovery.
 
         The public return type remains ToolResult for backward compatibility.
+        When a recovery integration is configured, that integration owns the
+        recovery/safety/routing path according to its public contract.
         """
         try:
             request = AgentActionBridge.tool_request(
@@ -545,34 +556,146 @@ class Agent:
         except AgentActionBridgeError as exc:
             raise AgentError(str(exc)) from exc
 
-        result = self._action_safety_pipeline.dispatch(
-            request
-        )
+        recovery_result: RecoveryResult | None = None
 
-        if not result.success:
-            pipeline_stage = result.metadata.get(
-                "pipeline_stage"
+        if self._recovery_integration is None:
+            action_result = self._action_safety_pipeline.dispatch(
+                request
             )
+        else:
+            try:
+                recovery_result = self._recovery_integration.execute(
+                    request
+                )
+            except AgentRecoveryIntegrationError as exc:
+                raise AgentError(
+                    str(exc)
+                ) from exc
 
-            if pipeline_stage in {
-                "mode",
-                "permission",
-                "safety",
-                "confirmation",
-            }:
-                raise PermissionDeniedError(
-                    result.error
-                    or (
-                        f"Action denied for tool "
-                        f"'{request.name}'."
+            if not recovery_result.success:
+                underlying = recovery_result.result
+
+                if isinstance(
+                    underlying,
+                    ActionResult,
+                ):
+                    self._raise_for_action_denial(
+                        underlying,
+                        recovery_result,
                     )
+
+                    return self._tool_result_from_action_result(
+                        underlying,
+                        recovery_result,
+                    )
+
+                if recovery_result.failure_kind in {
+                    RecoveryFailureKind.PERMISSION_DENIED,
+                    RecoveryFailureKind.CONFIRMATION_DENIED,
+                }:
+                    raise PermissionDeniedError(
+                        recovery_result.error
+                        or (
+                            f"Action denied for tool "
+                            f"'{request.name}'."
+                        )
+                    )
+
+                return ToolResult(
+                    success=False,
+                    error=(
+                        recovery_result.error
+                        or "Tool recovery failed."
+                    ),
+                    metadata={
+                        "recovery_failure_kind": (
+                            recovery_result.failure_kind.value
+                            if recovery_result.failure_kind is not None
+                            else None
+                        ),
+                        "recovery_attempts": (
+                            recovery_result.attempt_count
+                        ),
+                    },
                 )
 
-        tool_result_metadata = dict(
-            result.metadata
+            if not isinstance(
+                recovery_result.result,
+                ActionResult,
+            ):
+                raise AgentError(
+                    "Unified recovery returned an invalid action result."
+                )
+
+            action_result = recovery_result.result
+
+            self._raise_for_action_denial(
+                action_result,
+                recovery_result,
+            )
+
+        return self._tool_result_from_action_result(
+            action_result,
+            recovery_result,
         )
 
-        tool_result_data = result.data.get(
+    @staticmethod
+    def _raise_for_action_denial(
+        action_result: ActionResult,
+        recovery_result: RecoveryResult | None,
+    ) -> None:
+        """Preserve legacy PermissionDeniedError semantics."""
+        stage = action_result.metadata.get(
+            "pipeline_stage"
+        )
+        code = action_result.metadata.get(
+            "pipeline_error"
+        )
+
+        if stage in {
+            "mode",
+            "permission",
+            "safety",
+            "confirmation",
+        }:
+            raise PermissionDeniedError(
+                action_result.error
+                or "Action was denied by the safety pipeline."
+            )
+
+        if recovery_result is not None and (
+            recovery_result.failure_kind
+            in {
+                RecoveryFailureKind.PERMISSION_DENIED,
+                RecoveryFailureKind.CONFIRMATION_DENIED,
+            }
+        ):
+            raise PermissionDeniedError(
+                recovery_result.error
+                or action_result.error
+                or "Action was denied."
+            )
+
+        if code in {
+            "not_confirmed",
+            "denied",
+        }:
+            raise PermissionDeniedError(
+                action_result.error
+                or "Action was denied."
+            )
+
+    @staticmethod
+    def _tool_result_from_action_result(
+        action_result: ActionResult,
+        recovery_result: RecoveryResult | None,
+    ) -> ToolResult:
+        """Convert an ActionResult back to the legacy ToolResult API."""
+        metadata = dict(
+            action_result.metadata
+        )
+
+        tool_result_data = action_result.data.get(
             "tool_result"
         )
 
@@ -588,22 +711,25 @@ class Agent:
                 original_metadata,
                 Mapping,
             ):
-                tool_result_metadata.update(
+                metadata.update(
                     original_metadata
                 )
 
-        if result.success:
-            return ToolResult(
-                success=True,
-                output=result.output,
-                metadata=tool_result_metadata,
+        if recovery_result is not None:
+            metadata["recovery_attempts"] = (
+                recovery_result.attempt_count
             )
 
+            if recovery_result.failure_kind is not None:
+                metadata["recovery_failure_kind"] = (
+                    recovery_result.failure_kind.value
+                )
+
         return ToolResult(
-            success=False,
-            output=result.output,
-            error=result.error,
-            metadata=tool_result_metadata,
+            success=action_result.success,
+            output=action_result.output,
+            error=action_result.error,
+            metadata=metadata,
         )
 
     def _retrieve_memory(
