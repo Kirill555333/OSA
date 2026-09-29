@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-
 import time
 from typing import Any, Mapping
 
-from osa.actions.contracts import ActionRequest
+from osa.actions.contracts import ActionKind, ActionRequest
+from osa.actions.pipeline import ActionSafetyPipeline
+from osa.actions.router import ActionRouter
+from osa.actions.tool import ToolRegistryActionAdapter
+from osa.core.agent_action import AgentActionBridge, AgentActionBridgeError
+from osa.core.agent_action_policy import (
+    AgentModeActionPolicy,
+    LegacyConfirmationActionHandler,
+    LegacyPermissionActionPolicy,
+)
 from osa.core.agent_recovery import (
     AgentRecoveryIntegration,
     AgentRecoveryIntegrationError,
@@ -38,7 +46,6 @@ from osa.models import (
 )
 from osa.permissions import (
     ConfirmationHandler,
-    ConfirmationRequest,
     PermissionLevel,
     PermissionPolicy,
 )
@@ -126,6 +133,29 @@ class Agent:
         self._automatic_memory = automatic_memory
         self._recovery_integration = recovery_integration
 
+        self._action_router = ActionRouter(
+            {
+                ActionKind.TOOL: ToolRegistryActionAdapter(
+                    self._tool_registry
+                ),
+            }
+        )
+
+        self._action_safety_pipeline = ActionSafetyPipeline(
+            router=self._action_router,
+            mode_policy=AgentModeActionPolicy(
+                self._mode_policy,
+                lambda: self._mode,
+            ),
+            permission_policy=LegacyPermissionActionPolicy(
+                self._permission_policy,
+                logger=self._log,
+            ),
+            confirmation_handler=LegacyConfirmationActionHandler(
+                self._confirmation_handler
+            ),
+        )
+
     @property
     def mode(self) -> AgentMode:
         """Return the current execution mode."""
@@ -186,8 +216,8 @@ class Agent:
         """
         Execute an action through the unified recovery pipeline.
 
-        This explicit API is opt-in. Existing chat/tool execution continues
-        to use the legacy path until the later cross-layer integration step.
+        This explicit API remains opt-in. Legacy recovery for model requests
+        remains unchanged until the later recovery integration stage.
         """
         if self._recovery_integration is None:
             raise AgentError(
@@ -249,13 +279,13 @@ class Agent:
 
             return response
 
-        except AgentError as exc:
+        except AgentError:
             self._context.restore(previous_context)
 
             self._log(
                 "agent.chat.failed",
                 duration_ms=self._duration_ms(started_at),
-                error=str(exc),
+                error="agent execution failed",
             )
 
             raise
@@ -374,6 +404,7 @@ class Agent:
                         result = self.execute_tool(
                             tool_call.name,
                             tool_call.arguments,
+                            request_id=tool_call.id,
                         )
 
                     except PermissionDeniedError as exc:
@@ -494,83 +525,86 @@ class Agent:
         self,
         tool_name: str,
         arguments: Mapping[str, Any],
+        *,
+        request_id: str | None = None,
     ) -> ToolResult:
-        """Execute a registered tool after permission checks."""
-        if not self._mode_policy.supports_tool(
-            self._mode,
-            tool_name,
-        ):
-            raise PermissionDeniedError(
-                f"Tool '{tool_name}' is not available "
-                f"in agent mode '{self._mode.value}'."
-            )
+        """
+        Execute a registered tool through the unified action pipeline.
 
-        decision = self._permission_policy.decide(tool_name)
-
-        self._log(
-            "permission.decision",
-            tool=tool_name,
-            level=decision.level.value,
-            reason=decision.reason,
-        )
-
-        if decision.level == PermissionLevel.DENY:
-            raise PermissionDeniedError(
-                f"Permission denied for tool '{tool_name}': "
-                f"{decision.reason}"
-            )
-
-        if decision.level == PermissionLevel.CONFIRM:
-            confirmed = self._confirmation_handler.request(
-                ConfirmationRequest(
-                    tool_name=tool_name,
-                    description=(
-                        f"OSA wants to execute tool '{tool_name}'. "
-                        "Do you allow this action?"
-                    ),
-                )
-            )
-
-            if not confirmed:
-                raise PermissionDeniedError(
-                    "Permission confirmation was not granted "
-                    f"for tool '{tool_name}'."
-                )
-
+        The public return type remains ToolResult for backward compatibility.
+        """
         try:
-            tool = self._tool_registry.get(tool_name)
-        except KeyError as exc:
+            request = AgentActionBridge.tool_request(
+                tool_name,
+                arguments,
+                metadata={
+                    "execution_path": "agent.execute_tool",
+                },
+                request_id=request_id,
+            )
+        except AgentActionBridgeError as exc:
             raise AgentError(str(exc)) from exc
 
-        started_at = time.perf_counter()
-
-        self._log(
-            "tool.call",
-            tool=tool_name,
-            arguments=dict(arguments),
+        result = self._action_safety_pipeline.dispatch(
+            request
         )
 
-        try:
-            result = tool.execute(arguments)
-        except Exception as exc:
-            self._log(
-                "tool.failed",
-                tool=tool_name,
-                duration_ms=self._duration_ms(started_at),
-                error=str(exc),
+        if not result.success:
+            pipeline_stage = result.metadata.get(
+                "pipeline_stage"
             )
-            raise
 
-        self._log(
-            "tool.result",
-            tool=tool_name,
-            success=result.success,
-            duration_ms=self._duration_ms(started_at),
-            output_length=len(result.output),
-            error=result.error,
+            if pipeline_stage in {
+                "mode",
+                "permission",
+                "safety",
+                "confirmation",
+            }:
+                raise PermissionDeniedError(
+                    result.error
+                    or (
+                        f"Action denied for tool "
+                        f"'{request.name}'."
+                    )
+                )
+
+        tool_result_metadata = dict(
+            result.metadata
         )
 
-        return result
+        tool_result_data = result.data.get(
+            "tool_result"
+        )
+
+        if isinstance(
+            tool_result_data,
+            Mapping,
+        ):
+            original_metadata = tool_result_data.get(
+                "metadata"
+            )
+
+            if isinstance(
+                original_metadata,
+                Mapping,
+            ):
+                tool_result_metadata.update(
+                    original_metadata
+                )
+
+        if result.success:
+            return ToolResult(
+                success=True,
+                output=result.output,
+                metadata=tool_result_metadata,
+            )
+
+        return ToolResult(
+            success=False,
+            output=result.output,
+            error=result.error,
+            metadata=tool_result_metadata,
+        )
 
     def _retrieve_memory(
         self,
@@ -677,6 +711,7 @@ class Agent:
                     result = self.execute_tool(
                         tool_call.name,
                         tool_call.arguments,
+                        request_id=tool_call.id,
                     )
                 except PermissionDeniedError as exc:
                     self._log(
