@@ -10,6 +10,9 @@ from osa.voice.audio import (
     MicrophoneInput,
     SpeakerOutput,
 )
+from osa.voice.normalization import (
+    VoiceAudioNormalizer,
+)
 from osa.voice.session import (
     VoiceSession,
     VoiceSessionResult,
@@ -82,8 +85,8 @@ class VoiceRuntime:
     """
     Bridge VoiceSession with actual microphone and speaker devices.
 
-    The runtime owns device lifecycle. VoiceSession remains responsible for
-    VAD, STT, Agent, TTS, and voice state semantics.
+    The runtime owns device lifecycle and audio normalization. VoiceSession
+    remains responsible for VAD, STT, Agent, TTS, and voice state semantics.
     """
 
     def __init__(
@@ -93,6 +96,7 @@ class VoiceRuntime:
         speaker: SpeakerOutput,
         *,
         config: VoiceRuntimeConfig | None = None,
+        normalizer: VoiceAudioNormalizer | None = None,
     ) -> None:
         if session is None:
             raise ValueError(
@@ -133,6 +137,14 @@ class VoiceRuntime:
                 "speaker must provide play() and stop()."
             )
 
+        if normalizer is not None and not isinstance(
+            normalizer,
+            VoiceAudioNormalizer,
+        ):
+            raise TypeError(
+                "normalizer must be a VoiceAudioNormalizer."
+            )
+
         self._session = session
         self._microphone = microphone
         self._speaker = speaker
@@ -140,6 +152,11 @@ class VoiceRuntime:
             config
             if config is not None
             else VoiceRuntimeConfig()
+        )
+        self._normalizer = (
+            normalizer
+            if normalizer is not None
+            else VoiceAudioNormalizer()
         )
         self._state = VoiceRuntimeState.STOPPED
         self._lock = RLock()
@@ -163,6 +180,11 @@ class VoiceRuntime:
     def config(self) -> VoiceRuntimeConfig:
         """Return immutable runtime configuration."""
         return self._config
+
+    @property
+    def normalizer(self) -> VoiceAudioNormalizer:
+        """Return the configured audio normalizer."""
+        return self._normalizer
 
     @property
     def state(self) -> VoiceRuntimeState:
@@ -198,7 +220,7 @@ class VoiceRuntime:
         """
         Read one microphone chunk and process it through VoiceSession.
 
-        The runtime must be started first.
+        Audio normalization happens before VAD and STT.
         """
         with self._lock:
             if self._state != VoiceRuntimeState.READY:
@@ -212,12 +234,18 @@ class VoiceRuntime:
             self._state = VoiceRuntimeState.RUNNING
 
         try:
-            voice_input = self._microphone.read()
+            raw_voice_input = self._microphone.read()
+
+            normalized_voice_input = (
+                self._normalizer.normalize_input(
+                    raw_voice_input
+                )
+            )
 
             result = self._session.process_audio(
-                voice_input.audio,
-                sample_rate_hz=voice_input.sample_rate_hz,
-                channels=voice_input.channels,
+                normalized_voice_input.audio,
+                sample_rate_hz=normalized_voice_input.sample_rate_hz,
+                channels=normalized_voice_input.channels,
             )
 
             with self._lock:
@@ -236,9 +264,10 @@ class VoiceRuntime:
         result: VoiceSessionResult,
     ) -> None:
         """
-        Play a processed VoiceSessionResult through the speaker.
+        Normalize TTS output and play it through the speaker.
 
-        Successful playback completes the VoiceSession speaking state.
+        WAV payloads from providers such as Piper are unwrapped and converted
+        to the runtime playback format.
         """
         if not isinstance(
             result,
@@ -257,10 +286,28 @@ class VoiceRuntime:
             )
 
         try:
+            normalized_output = (
+                self._normalizer.normalize_tts_output(
+                    result.audio,
+                    fallback_sample_rate_hz=(
+                        self._config.output_sample_rate_hz
+                    ),
+                    fallback_channels=(
+                        self._config.output_channels
+                    ),
+                    target_sample_rate_hz=(
+                        self._config.output_sample_rate_hz
+                    ),
+                    target_channels=(
+                        self._config.output_channels
+                    ),
+                )
+            )
+
             self._speaker.play(
-                result.audio,
-                sample_rate_hz=self._config.output_sample_rate_hz,
-                channels=self._config.output_channels,
+                normalized_output.audio,
+                sample_rate_hz=normalized_output.sample_rate_hz,
+                channels=normalized_output.channels,
             )
 
             self._session.complete_speaking()
@@ -377,6 +424,7 @@ def create_voice_runtime(
     speaker: SpeakerOutput,
     *,
     config: VoiceRuntimeConfig | None = None,
+    normalizer: VoiceAudioNormalizer | None = None,
 ) -> VoiceRuntime:
     """Create a configured voice runtime."""
     return VoiceRuntime(
@@ -384,4 +432,5 @@ def create_voice_runtime(
         microphone,
         speaker,
         config=config,
+        normalizer=normalizer,
     )

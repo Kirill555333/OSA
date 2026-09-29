@@ -1,4 +1,4 @@
-"""Public voice API for OSA 0.6.x."""
+"""Public voice API for OSA 0.7.x."""
 
 from osa.voice.audio import (
     AudioInputError,
@@ -23,6 +23,23 @@ from osa.voice.contracts import (
     VoiceSessionState,
     VoiceTranscript,
 )
+from osa.voice.faster_whisper_stt import (
+    FasterWhisperConfig,
+    FasterWhisperSpeechToText,
+    create_faster_whisper_stt,
+)
+from osa.voice.normalization import (
+    AudioNormalizationConfig,
+    AudioNormalizationError,
+    NormalizedAudio,
+    VoiceAudioNormalizer,
+    create_voice_audio_normalizer,
+)
+from osa.voice.piper_tts import (
+    PiperTTSConfig,
+    PiperTextToSpeech,
+    create_piper_tts,
+)
 from osa.voice.platform import (
     AudioBackend,
     AudioPlatform,
@@ -32,6 +49,13 @@ from osa.voice.platform import (
     UnavailableAudioBackend,
     create_audio_backend_factory,
     create_default_audio_backend,
+)
+from osa.voice.providers import (
+    VoiceProviderConfig,
+    VoiceProviderConfigError,
+    VoiceProviderSelection,
+    create_default_voice_provider_config,
+    load_voice_provider_config,
 )
 from osa.voice.runtime import (
     VoiceRuntime,
@@ -52,6 +76,17 @@ from osa.voice.stt import (
     SpeechToText,
     SpeechToTextError,
 )
+from osa.voice.streaming import (
+    BufferedSpeechToTextStream,
+    ChunkedTextToSpeechStream,
+    StreamingSpeechToText,
+    StreamingTextToSpeech,
+    VoiceStreamChunk,
+    VoiceStreamingError,
+    VoiceStreamingState,
+    create_buffered_stt_stream,
+    create_chunked_tts_stream,
+)
 from osa.voice.tts import (
     FixedTextToSpeech,
     TextToSpeech,
@@ -66,30 +101,45 @@ from osa.voice.vad import (
 __all__ = [
     "AudioBackend",
     "AudioInputError",
+    "AudioNormalizationConfig",
+    "AudioNormalizationError",
     "AudioOutputError",
     "AudioPlatform",
     "AudioPlatformError",
     "AudioPlatformUnavailableError",
+    "BufferedSpeechToTextStream",
+    "ChunkedTextToSpeechStream",
     "DesktopAudioBackendFactory",
     "EnergyVoiceActivityDetector",
     "FakeMicrophone",
     "FakeSpeaker",
     "FixedSpeechToText",
     "FixedTextToSpeech",
+    "FasterWhisperConfig",
+    "FasterWhisperSpeechToText",
     "MicrophoneInput",
+    "NormalizedAudio",
+    "PiperTTSConfig",
+    "PiperTextToSpeech",
     "SpeakerOutput",
     "SpeechToText",
     "SpeechToTextError",
+    "StreamingSpeechToText",
+    "StreamingTextToSpeech",
     "TextToSpeech",
     "TextToSpeechError",
     "UnavailableAudioBackend",
     "VoiceActivityDetectionError",
     "VoiceActivityDetector",
     "VoiceAgent",
+    "VoiceAudioNormalizer",
     "VoiceCompositionError",
     "VoiceContractError",
     "VoiceInput",
     "VoiceOutput",
+    "VoiceProviderConfig",
+    "VoiceProviderConfigError",
+    "VoiceProviderSelection",
     "VoiceRuntime",
     "VoiceRuntimeConfig",
     "VoiceRuntimeError",
@@ -100,12 +150,22 @@ __all__ = [
     "VoiceSessionResult",
     "VoiceSessionState",
     "VoiceSessionStateError",
+    "VoiceStreamChunk",
+    "VoiceStreamingError",
+    "VoiceStreamingState",
     "VoiceTranscript",
     "create_audio_backend_factory",
     "create_default_audio_backend",
+    "create_default_voice_provider_config",
     "create_default_voice_runtime",
     "create_fake_microphone",
     "create_fake_speaker",
+    "create_faster_whisper_stt",
+    "create_piper_tts",
+    "create_voice_audio_normalizer",
     "create_voice_runtime",
     "create_voice_runtime_from_backend",
+    "create_buffered_stt_stream",
+    "create_chunked_tts_stream",
+    "load_voice_provider_config",
 ]
