@@ -53,9 +53,8 @@ class VoiceSession:
     """
     Coordinate VAD, STT, Agent, and TTS.
 
-    The session does not own a microphone or speaker. Audio capture and
-    playback remain platform/interface concerns outside this orchestration
-    layer.
+    Audio capture and playback remain outside this layer. The session only
+    coordinates the voice lifecycle and exposes a safe interruption boundary.
     """
 
     def __init__(
@@ -72,9 +71,25 @@ class VoiceSession:
                 "agent is required."
             )
 
+        if not isinstance(
+            agent,
+            VoiceAgent,
+        ):
+            raise TypeError(
+                "agent must provide a chat(user_input) method."
+            )
+
         if vad is None:
             raise ValueError(
                 "vad is required."
+            )
+
+        if not isinstance(
+            vad,
+            VoiceActivityDetector,
+        ):
+            raise TypeError(
+                "vad must provide detect() and reset() methods."
             )
 
         if stt is None:
@@ -82,9 +97,25 @@ class VoiceSession:
                 "stt is required."
             )
 
+        if not isinstance(
+            stt,
+            SpeechToText,
+        ):
+            raise TypeError(
+                "stt must provide a transcribe() method."
+            )
+
         if tts is None:
             raise ValueError(
                 "tts is required."
+            )
+
+        if not isinstance(
+            tts,
+            TextToSpeech,
+        ):
+            raise TypeError(
+                "tts must provide synthesize() and stop() methods."
             )
 
         self._agent = agent
@@ -120,7 +151,7 @@ class VoiceSession:
 
     @property
     def config(self) -> VoiceSessionConfig:
-        """Return the immutable voice session configuration."""
+        """Return the voice session configuration."""
         return self._config
 
     @property
@@ -141,11 +172,11 @@ class VoiceSession:
         Non-speech returns None and leaves the session idle.
 
         Speech follows:
+
             IDLE -> LISTENING -> PROCESSING -> SPEAKING
 
-        SPEAKING is intentionally retained until the caller confirms that
-        playback has completed with complete_speaking(), or interrupts it
-        with interrupt().
+        SPEAKING remains active until playback is explicitly completed or
+        interrupted.
         """
         self._require_state(
             VoiceSessionState.IDLE
@@ -184,15 +215,19 @@ class VoiceSession:
                 response
             )
 
-            output = VoiceOutput(
-                text=response_text,
-                language=(
-                    transcript.language
-                    if transcript.language is not None
-                    else self._config.language
+            response_language = (
+                transcript.language
+                if transcript.language is not None
+                else (
+                    self._config.language
                     if self._config.language != "auto"
                     else None
-                ),
+                )
+            )
+
+            output = VoiceOutput(
+                text=response_text,
+                language=response_language,
             )
 
             self._state = VoiceSessionState.SPEAKING
@@ -228,7 +263,7 @@ class VoiceSession:
         """
         Mark current speech playback as completed.
 
-        No speaker is invoked here; the speaker remains outside this layer.
+        Playback itself is performed outside this class.
         """
         self._require_state(
             VoiceSessionState.SPEAKING
@@ -238,11 +273,16 @@ class VoiceSession:
 
     def interrupt(self) -> None:
         """
-        Stop current speech presentation.
+        Interrupt current speech presentation.
 
-        Interruption only affects TTS presentation. It does not cancel an
-        already completed Agent operation or alter any action result.
+        This only stops TTS playback. It does not cancel or modify an Agent
+        result and cannot affect an already completed action execution.
         """
+        if not self._config.interrupt_enabled:
+            raise VoiceSessionStateError(
+                "Voice interruption is disabled by configuration."
+            )
+
         self._require_state(
             VoiceSessionState.SPEAKING
         )
@@ -258,8 +298,14 @@ class VoiceSession:
         self._state = VoiceSessionState.IDLE
 
     def reset(self) -> None:
-        """Reset the session and underlying VAD state to idle."""
+        """
+        Reset the session to idle.
+
+        Any active TTS playback is stopped before reset completes.
+        """
         if self._state == VoiceSessionState.SPEAKING:
+            self._state = VoiceSessionState.STOPPING
+
             try:
                 self._tts.stop()
             except Exception:
@@ -271,14 +317,16 @@ class VoiceSession:
 
     def stop(self) -> None:
         """
-        Stop the session.
+        Permanently stop the session.
 
-        SPEAKING is interrupted before entering STOPPED.
+        Active TTS playback is stopped before entering STOPPED.
         """
         if self._state == VoiceSessionState.STOPPED:
             return
 
         if self._state == VoiceSessionState.SPEAKING:
+            self._state = VoiceSessionState.STOPPING
+
             try:
                 self._tts.stop()
             except Exception:
@@ -318,9 +366,11 @@ class VoiceSession:
                 "Agent response must expose string content."
             )
 
-        if not content.strip():
+        normalized_content = content.strip()
+
+        if not normalized_content:
             raise VoiceSessionError(
                 "Agent response content cannot be empty."
             )
 
-        return content.strip()
+        return normalized_content
