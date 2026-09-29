@@ -14,10 +14,7 @@ from osa.actions.contracts import (
 from osa.actions.pipeline import ActionSafetyPipeline
 from osa.actions.router import ActionRouter
 from osa.actions.tool import ToolRegistryActionAdapter
-from osa.core.agent_action import (
-    AgentActionBridge,
-    AgentActionBridgeError,
-)
+from osa.core.agent_action import AgentActionBridgeError
 from osa.core.agent_action_policy import (
     AgentModeActionPolicy,
     LegacyConfirmationActionHandler,
@@ -26,6 +23,10 @@ from osa.core.agent_action_policy import (
 from osa.core.agent_recovery import (
     AgentRecoveryIntegration,
     AgentRecoveryIntegrationError,
+)
+from osa.core.agent_tool_round import (
+    AgentToolRound,
+    AgentToolRoundError,
 )
 from osa.core.context import ConversationContext
 from osa.core.modes import (
@@ -53,6 +54,7 @@ from osa.models import (
     ModelInterface,
     ModelRequest,
     ModelResponse,
+    ToolCall,
 )
 from osa.permissions import (
     ConfirmationHandler,
@@ -277,9 +279,11 @@ class Agent:
                 if memory_result is not None
                 else None
             )
+
             self._capture_automatic_memory(
                 user_input
             )
+
             self._log(
                 "agent.chat.completed",
                 duration_ms=self._duration_ms(started_at),
@@ -352,7 +356,7 @@ class Agent:
                 )
 
                 response_parts: list[str] = []
-                tool_calls = ()
+                tool_calls: tuple[ToolCall, ...] = ()
 
                 try:
                     for event in self._model.generate_stream_events(
@@ -410,10 +414,8 @@ class Agent:
 
                 for tool_call in tool_calls:
                     try:
-                        result = self.execute_tool(
-                            tool_call.name,
-                            tool_call.arguments,
-                            request_id=tool_call.id,
+                        result = self._execute_model_tool_call(
+                            tool_call
                         )
 
                     except PermissionDeniedError as exc:
@@ -541,26 +543,56 @@ class Agent:
         Execute a registered tool through unified safety and recovery.
 
         The public return type remains ToolResult for backward compatibility.
-        When a recovery integration is configured, that integration owns the
-        recovery/safety/routing path according to its public contract.
         """
         try:
-            request = AgentActionBridge.tool_request(
+            request = AgentToolRound.request(
                 tool_name,
                 arguments,
+                request_id=request_id,
                 metadata={
                     "execution_path": "agent.execute_tool",
                 },
-                request_id=request_id,
             )
-        except AgentActionBridgeError as exc:
+        except AgentToolRoundError as exc:
             raise AgentError(str(exc)) from exc
 
+        return self._execute_action_request(
+            request
+        )
+
+    def _execute_model_tool_call(
+        self,
+        tool_call: ToolCall,
+    ) -> ToolResult:
+        """Execute one model tool call through the shared action path."""
+        try:
+            request = AgentToolRound.request_from_tool_call(
+                tool_call
+            )
+        except AgentToolRoundError as exc:
+            raise AgentError(
+                str(exc)
+            ) from exc
+
+        return self._execute_action_request(
+            request
+        )
+
+    def _execute_action_request(
+        self,
+        request: ActionRequest,
+    ) -> ToolResult:
+        """Execute one TOOL ActionRequest through unified infrastructure."""
         recovery_result: RecoveryResult | None = None
 
         if self._recovery_integration is None:
             action_result = self._action_safety_pipeline.dispatch(
                 request
+            )
+
+            self._raise_for_action_denial(
+                action_result,
+                None,
             )
         else:
             try:
@@ -834,10 +866,8 @@ class Agent:
 
             for tool_call in response.tool_calls:
                 try:
-                    result = self.execute_tool(
-                        tool_call.name,
-                        tool_call.arguments,
-                        request_id=tool_call.id,
+                    result = self._execute_model_tool_call(
+                        tool_call
                     )
                 except PermissionDeniedError as exc:
                     self._log(
