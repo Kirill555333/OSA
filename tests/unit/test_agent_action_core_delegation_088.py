@@ -143,20 +143,28 @@ def test_core_without_recovery_uses_safety_pipeline_only() -> None:
         recovery=False
     )
 
-    action_result, recovery_result = (
-        agent._execute_action_core(
-            ActionRequest(
-                kind=ActionKind.TOOL,
-                name="demo",
-                arguments={
-                    "value": 7,
-                },
-                request_id="delegation-core-1",
-            )
+    (
+        action_result,
+        recovery_result,
+        context,
+    ) = agent._execute_action_core(
+        ActionRequest(
+            kind=ActionKind.TOOL,
+            name="demo",
+            arguments={
+                "value": 7,
+            },
+            request_id="delegation-core-1",
         )
     )
 
     assert recovery_result is None
+
+    assert context.request_id == "delegation-core-1"
+    assert context.run_id is None
+    assert context.task_id is None
+    assert context.round_number is None
+
     assert isinstance(
         action_result,
         ActionResult,
@@ -170,7 +178,11 @@ def test_core_with_recovery_returns_both_action_and_recovery_results() -> None:
         recovery=True
     )
 
-    recovery = agent.execute_action_with_recovery(
+    (
+        action_result,
+        recovery_result,
+        context,
+    ) = agent._execute_action_core(
         ActionRequest(
             kind=ActionKind.TOOL,
             name="demo",
@@ -178,18 +190,26 @@ def test_core_with_recovery_returns_both_action_and_recovery_results() -> None:
                 "value": 42,
             },
             request_id="delegation-core-2",
-        )
+        ),
+        run_id="run-core",
+        task_id="task-core",
     )
 
     assert isinstance(
-        recovery,
+        recovery_result,
         RecoveryResult,
     )
     assert isinstance(
-        recovery.result,
+        action_result,
         ActionResult,
     )
 
-    assert recovery.result.request_id == "delegation-core-2"
-    assert recovery.result.success is True
-    assert recovery.result.output == "recovery:42"
+    assert action_result.request_id == "delegation-core-2"
+    assert action_result.success is True
+    assert action_result.output == "recovery:42"
+
+    assert recovery_result.result is action_result
+
+    assert context.request_id == "delegation-core-2"
+    assert context.run_id == "run-core"
+    assert context.task_id == "task-core"

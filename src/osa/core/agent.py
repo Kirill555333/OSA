@@ -20,6 +20,10 @@ from osa.core.agent_action_policy import (
     LegacyPermissionActionPolicy,
 )
 from osa.core.agent_observability import AgentObservability
+from osa.core.execution_context import (
+    ExecutionContext,
+    ExecutionContextError,
+)
 from osa.core.agent_recovery import (
     AgentRecoveryIntegration,
     AgentRecoveryIntegrationError,
@@ -243,7 +247,7 @@ class Agent:
                 "Unified recovery integration is not configured."
             )
 
-        _, recovery_result = self._execute_action_core(
+        _, recovery_result, _ = self._execute_action_core(
             request,
             run_id=run_id,
             task_id=task_id,
@@ -620,21 +624,26 @@ class Agent:
         *,
         run_id: str | None = None,
         task_id: str | None = None,
-    ) -> tuple[ActionResult | None, RecoveryResult | None]:
+    ) -> tuple[
+        ActionResult | None,
+        RecoveryResult | None,
+        ExecutionContext,
+    ]:
         """Execute one ActionRequest through the single internal core."""
-        round_number = request.metadata.get(
-            "round"
-        )
-
-        if not isinstance(
-            round_number,
-            int,
-        ):
-            round_number = None
+        try:
+            context = ExecutionContext.from_action_request(
+                request,
+                run_id=run_id,
+                task_id=task_id,
+            )
+        except ExecutionContextError as exc:
+            raise AgentError(
+                str(exc)
+            ) from exc
 
         self._observability.action_requested(
             request,
-            round_number=round_number,
+            context=context,
         )
 
         if self._recovery_integration is None:
@@ -645,10 +654,14 @@ class Agent:
             self._log_action_outcome(
                 request,
                 action_result,
-                round_number=round_number,
+                context=context,
             )
 
-            return action_result, None
+            return (
+                action_result,
+                None,
+                context,
+            )
 
         max_attempts = getattr(
             self._recovery_integration.executor,
@@ -665,14 +678,14 @@ class Agent:
         self._observability.recovery_started(
             request,
             max_attempts=max_attempts,
-            round_number=round_number,
+            context=context,
         )
 
         try:
             recovery_result = self._recovery_integration.execute(
                 request,
-                run_id=run_id,
-                task_id=task_id,
+                run_id=context.run_id,
+                task_id=context.task_id,
             )
         except AgentRecoveryIntegrationError as exc:
             failure_result = ActionResult.failed(
@@ -684,7 +697,7 @@ class Agent:
                 request,
                 failure_result,
                 recovery=None,
-                round_number=round_number,
+                context=context,
             )
 
             raise AgentError(
@@ -694,7 +707,7 @@ class Agent:
         self._observability.recovery_completed(
             request,
             recovery_result,
-            round_number=round_number,
+            context=context,
         )
 
         underlying = recovery_result.result
@@ -707,10 +720,14 @@ class Agent:
                 request,
                 underlying,
                 recovery=recovery_result,
-                round_number=round_number,
+                context=context,
             )
 
-            return underlying, recovery_result
+            return (
+                underlying,
+                recovery_result,
+                context,
+            )
 
         if recovery_result.success:
             failure_message = (
@@ -732,29 +749,29 @@ class Agent:
             request,
             failure_result,
             recovery=recovery_result,
-            round_number=round_number,
+            context=context,
         )
 
-        return None, recovery_result
+        return (
+            None,
+            recovery_result,
+            context,
+        )
 
     def _execute_action_request(
         self,
         request: ActionRequest,
     ) -> ToolResult:
         """Project the unified action core into the legacy ToolResult API."""
-        action_result, recovery_result = self._execute_action_core(
+        (
+            action_result,
+            recovery_result,
+            context,
+        ) = self._execute_action_core(
             request
         )
 
-        round_number = request.metadata.get(
-            "round"
-        )
-
-        if not isinstance(
-            round_number,
-            int,
-        ):
-            round_number = None
+        round_number = context.round_number
 
         if recovery_result is None:
             if action_result is None:
@@ -833,6 +850,7 @@ class Agent:
         action_result: ActionResult,
         *,
         recovery: RecoveryResult | None = None,
+        context: ExecutionContext | None = None,
         round_number: int | None = None,
     ) -> None:
         """Emit telemetry for an action outcome without changing execution."""
@@ -862,6 +880,7 @@ class Agent:
                     else "denied"
                 ),
                 reason=action_result.error,
+                context=context,
                 round_number=round_number,
             )
             return
@@ -870,6 +889,7 @@ class Agent:
             request,
             action_result,
             recovery=recovery,
+            context=context,
             round_number=round_number,
         )
 

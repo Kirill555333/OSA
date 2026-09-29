@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from osa.actions.contracts import ActionRequest, ActionResult
+from osa.core.execution_context import ExecutionContext
 from osa.recovery_contracts import RecoveryResult
 
 
@@ -22,16 +23,20 @@ class AgentObservability:
         self,
         request: ActionRequest,
         *,
+        context: ExecutionContext | None = None,
         round_number: int | None = None,
     ) -> None:
         """Emit the start of one unified action."""
         self._emit(
             "action.requested",
-            request_id=request.request_id,
+            **self._correlation_data(
+                request,
+                context=context,
+                round_number=round_number,
+            ),
             action_kind=request.kind.value,
             action_name=request.name,
             status="requested",
-            round=round_number,
         )
 
     def action_completed(
@@ -40,12 +45,17 @@ class AgentObservability:
         result: ActionResult,
         *,
         recovery: RecoveryResult | None = None,
+        context: ExecutionContext | None = None,
         round_number: int | None = None,
     ) -> None:
         """Emit successful or failed action completion."""
         self._emit(
             "action.completed",
-            request_id=request.request_id,
+            **self._correlation_data(
+                request,
+                context=context,
+                round_number=round_number,
+            ),
             action_kind=request.kind.value,
             action_name=request.name,
             status=(
@@ -53,7 +63,6 @@ class AgentObservability:
                 if result.success
                 else "failed"
             ),
-            round=round_number,
             success=result.success,
             output_length=len(result.output),
             error=result.error,
@@ -64,8 +73,10 @@ class AgentObservability:
             ),
             recovery_failure_kind=(
                 recovery.failure_kind.value
-                if recovery is not None
-                and recovery.failure_kind is not None
+                if (
+                    recovery is not None
+                    and recovery.failure_kind is not None
+                )
                 else None
             ),
         )
@@ -76,18 +87,22 @@ class AgentObservability:
         *,
         decision: str,
         reason: str | None = None,
+        context: ExecutionContext | None = None,
         round_number: int | None = None,
     ) -> None:
-        """Emit a safety/permission/confirmation denial."""
+        """Emit one denied action."""
         self._emit(
             "action.denied",
-            request_id=request.request_id,
+            **self._correlation_data(
+                request,
+                context=context,
+                round_number=round_number,
+            ),
             action_kind=request.kind.value,
             action_name=request.name,
             status="denied",
             decision=decision,
             reason=reason,
-            round=round_number,
         )
 
     def recovery_started(
@@ -95,17 +110,21 @@ class AgentObservability:
         request: ActionRequest,
         *,
         max_attempts: int,
+        context: ExecutionContext | None = None,
         round_number: int | None = None,
     ) -> None:
-        """Emit the start of unified action recovery."""
+        """Emit the start of recovery for one action."""
         self._emit(
             "action.recovery.started",
-            request_id=request.request_id,
+            **self._correlation_data(
+                request,
+                context=context,
+                round_number=round_number,
+            ),
             action_kind=request.kind.value,
             action_name=request.name,
             status="started",
             max_attempts=max_attempts,
-            round=round_number,
         )
 
     def recovery_completed(
@@ -113,12 +132,17 @@ class AgentObservability:
         request: ActionRequest,
         recovery: RecoveryResult,
         *,
+        context: ExecutionContext | None = None,
         round_number: int | None = None,
     ) -> None:
-        """Emit the result of unified action recovery."""
+        """Emit recovery completion."""
         self._emit(
             "action.recovery.completed",
-            request_id=request.request_id,
+            **self._correlation_data(
+                request,
+                context=context,
+                round_number=round_number,
+            ),
             action_kind=request.kind.value,
             action_name=request.name,
             status=(
@@ -142,14 +166,36 @@ class AgentObservability:
                 if recovery.failure_kind is not None
                 else None
             ),
-            round=round_number,
         )
+
+    @staticmethod
+    def _correlation_data(
+        request: ActionRequest,
+        *,
+        context: ExecutionContext | None,
+        round_number: int | None,
+    ) -> dict[str, Any]:
+        """Build telemetry correlation data without action arguments."""
+        if context is not None:
+            return {
+                "request_id": context.request_id,
+                "run_id": context.run_id,
+                "task_id": context.task_id,
+                "round": context.round_number,
+                "source": context.source,
+            }
+
+        return {
+            "request_id": request.request_id,
+            "round": round_number,
+        }
 
     def _emit(
         self,
         event: str,
         **data: Any,
     ) -> None:
+        """Emit one event while omitting absent optional fields."""
         if self._logger is None:
             return
 
@@ -163,3 +209,8 @@ class AgentObservability:
             event,
             **safe_data,
         )
+
+
+__all__ = [
+    "AgentObservability",
+]
