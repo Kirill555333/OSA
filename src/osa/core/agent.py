@@ -240,24 +240,105 @@ class Agent:
         """
         Execute an action through the unified recovery pipeline.
 
-        This explicit API remains unchanged and delegates to the configured
-        recovery integration.
+        The explicit public API remains recovery-authoritative while sharing
+        the same passive action observability lifecycle as Agent tool rounds.
         """
         if self._recovery_integration is None:
             raise AgentError(
                 "Unified recovery integration is not configured."
             )
 
+        round_number = request.metadata.get(
+            "round"
+        )
+
+        if not isinstance(
+            round_number,
+            int,
+        ):
+            round_number = None
+
+        self._observability.action_requested(
+            request,
+            round_number=round_number,
+        )
+
+        max_attempts = getattr(
+            self._recovery_integration.executor,
+            "max_attempts",
+            None,
+        )
+
+        if not isinstance(
+            max_attempts,
+            int,
+        ) or max_attempts < 1:
+            max_attempts = 1
+
+        self._observability.recovery_started(
+            request,
+            max_attempts=max_attempts,
+            round_number=round_number,
+        )
+
         try:
-            return self._recovery_integration.execute(
+            result = self._recovery_integration.execute(
                 request,
                 run_id=run_id,
                 task_id=task_id,
             )
         except AgentRecoveryIntegrationError as exc:
+            failure_result = ActionResult.failed(
+                request.request_id,
+                str(exc),
+            )
+
+            self._observability.action_completed(
+                request,
+                failure_result,
+                recovery=None,
+                round_number=round_number,
+            )
+
             raise AgentError(
                 str(exc)
             ) from exc
+
+        self._observability.recovery_completed(
+            request,
+            result,
+            round_number=round_number,
+        )
+
+        underlying = result.result
+
+        if isinstance(
+            underlying,
+            ActionResult,
+        ):
+            self._log_action_outcome(
+                request,
+                underlying,
+                recovery=result,
+                round_number=round_number,
+            )
+
+            return result
+
+        failure_result = ActionResult.failed(
+            request.request_id,
+            result.error
+            or "Unified recovery returned an invalid action result.",
+        )
+
+        self._observability.action_completed(
+            request,
+            failure_result,
+            recovery=result,
+            round_number=round_number,
+        )
+
+        return result
 
     def chat(self, user_input: str) -> ModelResponse:
         """Process a user message, including memory and tool calls."""
@@ -655,6 +736,21 @@ class Agent:
                 None,
             )
         else:
+            max_attempts = getattr(
+                self._recovery_integration.executor,
+                "max_attempts",
+                None,
+            )
+
+            if not isinstance(max_attempts, int) or max_attempts < 1:
+                max_attempts = 1
+
+            self._observability.recovery_started(
+                request,
+                max_attempts=max_attempts,
+                round_number=round_number,
+            )
+
             try:
                 recovery_result = self._recovery_integration.execute(
                     request
@@ -683,6 +779,12 @@ class Agent:
                     underlying,
                     ActionResult,
                 ):
+                    self._observability.recovery_completed(
+                        request,
+                        recovery_result,
+                        round_number=round_number,
+                    )
+
                     self._log_action_outcome(
                         request,
                         underlying,
@@ -751,6 +853,12 @@ class Agent:
                         ),
                     },
                 )
+
+            self._observability.recovery_completed(
+                request,
+                recovery_result,
+                round_number=round_number,
+            )
 
             if not isinstance(
                 recovery_result.result,
