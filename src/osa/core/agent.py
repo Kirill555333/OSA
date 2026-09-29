@@ -14,7 +14,6 @@ from osa.actions.contracts import (
 from osa.actions.pipeline import ActionSafetyPipeline
 from osa.actions.router import ActionRouter
 from osa.actions.tool import ToolRegistryActionAdapter
-from osa.core.agent_action import AgentActionBridgeError
 from osa.core.agent_action_policy import (
     AgentModeActionPolicy,
     LegacyConfirmationActionHandler,
@@ -24,10 +23,12 @@ from osa.core.agent_recovery import (
     AgentRecoveryIntegration,
     AgentRecoveryIntegrationError,
 )
-from osa.core.agent_tool_round import (
-    AgentToolRound,
-    AgentToolRoundError,
+from osa.core.agent_runtime import (
+    AgentRoundExecutor,
+    AgentRuntimeError,
 )
+from osa.core.agent_stream import AgentStreamAccumulator
+from osa.core.agent_tool_round import AgentToolRound, AgentToolRoundError
 from osa.core.context import ConversationContext
 from osa.core.modes import (
     AgentMode,
@@ -165,6 +166,10 @@ class Agent:
             confirmation_handler=LegacyConfirmationActionHandler(
                 self._confirmation_handler
             ),
+        )
+
+        self._round_executor = AgentRoundExecutor(
+            self._execute_model_tool_call
         )
 
     @property
@@ -355,36 +360,29 @@ class Agent:
                     tools=self._available_tool_definitions(),
                 )
 
-                response_parts: list[str] = []
-                tool_calls: tuple[ToolCall, ...] = ()
+                accumulator = AgentStreamAccumulator()
 
                 try:
                     for event in self._model.generate_stream_events(
                         model_request
                     ):
-                        if event.content:
-                            response_parts.append(
-                                event.content
-                            )
-                            yield event.content
+                        accumulator.add(event)
 
-                        if event.tool_calls:
-                            tool_calls = event.tool_calls
+                        if event.content:
+                            yield event.content
 
                 except ModelError as exc:
                     raise AgentError(
                         f"Model streaming failed: {exc}"
                     ) from exc
 
-                response_content = "".join(
-                    response_parts
-                )
+                round_result = accumulator.result()
 
-                if not tool_calls:
+                if round_result.completed:
                     self._context.add(
                         ChatMessage(
                             role="assistant",
-                            content=response_content,
+                            content=round_result.content,
                         )
                     )
 
@@ -398,7 +396,7 @@ class Agent:
                             started_at
                         ),
                         response_length=len(
-                            response_content
+                            round_result.content
                         ),
                     )
 
@@ -407,35 +405,39 @@ class Agent:
                 self._context.add(
                     ChatMessage(
                         role="assistant",
-                        content=response_content,
-                        tool_calls=tool_calls,
+                        content=round_result.content,
+                        tool_calls=round_result.tool_calls,
                     )
                 )
 
-                for tool_call in tool_calls:
-                    try:
-                        result = self._execute_model_tool_call(
-                            tool_call
-                        )
+                executions = self._execute_model_tool_calls(
+                    round_result.tool_calls
+                )
 
-                    except PermissionDeniedError as exc:
-                        self._context.add(
-                            ChatMessage(
-                                role="tool",
-                                content=(
-                                    "Tool execution denied: "
-                                    f"{exc}"
-                                ),
-                                tool_call_id=tool_call.id,
+                for execution in executions:
+                    tool_call = execution.tool_call
+
+                    if execution.error is not None:
+                        if isinstance(
+                            execution.error,
+                            PermissionDeniedError,
+                        ):
+                            self._context.add(
+                                ChatMessage(
+                                    role="tool",
+                                    content=(
+                                        "Tool execution denied: "
+                                        f"{execution.error}"
+                                    ),
+                                    tool_call_id=tool_call.id,
+                                )
                             )
-                        )
-                        continue
+                            continue
 
-                    except Exception as exc:
                         error_message = (
                             ErrorRecovery.tool_exception_message(
                                 tool_call.name,
-                                exc,
+                                execution.error,
                             )
                         )
 
@@ -448,11 +450,16 @@ class Agent:
                         )
                         continue
 
+                    if execution.result is None:
+                        raise AgentError(
+                            "Tool execution returned no result or error."
+                        )
+
                     self._context.add(
                         ChatMessage(
                             role="tool",
                             content=self._tool_result_content(
-                                result
+                                execution.result
                             ),
                             tool_call_id=tool_call.id,
                         )
@@ -577,6 +584,20 @@ class Agent:
         return self._execute_action_request(
             request
         )
+
+    def _execute_model_tool_calls(
+        self,
+        tool_calls: tuple[ToolCall, ...],
+    ):
+        """Execute all model tool calls through the shared round executor."""
+        try:
+            return self._round_executor.execute(
+                tool_calls
+            )
+        except AgentRuntimeError as exc:
+            raise AgentError(
+                str(exc)
+            ) from exc
 
     def _execute_action_request(
         self,
@@ -864,38 +885,45 @@ class Agent:
                 )
             )
 
-            for tool_call in response.tool_calls:
-                try:
-                    result = self._execute_model_tool_call(
-                        tool_call
-                    )
-                except PermissionDeniedError as exc:
-                    self._log(
-                        "recovery.tool_denied",
-                        tool=tool_call.name,
-                        error=str(exc),
-                    )
+            executions = self._execute_model_tool_calls(
+                response.tool_calls
+            )
 
-                    self._context.add(
-                        ChatMessage(
-                            role="tool",
-                            content=f"Tool execution denied: {exc}",
-                            tool_call_id=tool_call.id,
+            for execution in executions:
+                tool_call = execution.tool_call
+
+                if execution.error is not None:
+                    if isinstance(
+                        execution.error,
+                        PermissionDeniedError,
+                    ):
+                        self._log(
+                            "recovery.tool_denied",
+                            tool=tool_call.name,
+                            error=str(execution.error),
                         )
-                    )
 
-                    continue
+                        self._context.add(
+                            ChatMessage(
+                                role="tool",
+                                content=(
+                                    "Tool execution denied: "
+                                    f"{execution.error}"
+                                ),
+                                tool_call_id=tool_call.id,
+                            )
+                        )
+                        continue
 
-                except Exception as exc:
                     error_message = ErrorRecovery.tool_exception_message(
                         tool_call.name,
-                        exc,
+                        execution.error,
                     )
 
                     self._log(
                         "recovery.tool_error",
                         tool=tool_call.name,
-                        error=str(exc),
+                        error=str(execution.error),
                     )
 
                     self._context.add(
@@ -905,14 +933,18 @@ class Agent:
                             tool_call_id=tool_call.id,
                         )
                     )
-
                     continue
+
+                if execution.result is None:
+                    raise AgentError(
+                        "Tool execution returned no result or error."
+                    )
 
                 self._context.add(
                     ChatMessage(
                         role="tool",
                         content=self._tool_result_content(
-                            result
+                            execution.result
                         ),
                         tool_call_id=tool_call.id,
                     )
