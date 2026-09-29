@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from osa.actions.contracts import ActionRequest
+from osa.core.execution_context import (
+    ExecutionContext,
+    ExecutionContextError,
+)
 from osa.tasks.action_bridge import (
     AutonomousActionBridge,
     AutonomousActionResolver,
@@ -19,7 +23,8 @@ class UnifiedAutonomousExecutor:
     Resolve and execute autonomous tasks through the unified action pipeline.
 
     The executor owns composition only:
-        task -> ActionRequest -> ActionSafetyPipeline -> task result
+        task -> ActionRequest -> ExecutionContext -> ActionSafetyPipeline
+        -> task result
     """
 
     def __init__(
@@ -56,7 +61,8 @@ class UnifiedAutonomousExecutor:
         task_id: str,
     ) -> AutonomousTaskResult:
         """
-        Resolve one task into an ActionRequest and execute it safely.
+        Resolve one task into an ActionRequest and execute it through the
+        canonical autonomous execution context.
         """
         normalized_run_id = self._normalize_identifier(
             run_id,
@@ -82,7 +88,10 @@ class UnifiedAutonomousExecutor:
                 ),
             )
 
-        if not isinstance(request, ActionRequest):
+        if not isinstance(
+            request,
+            ActionRequest,
+        ):
             return AutonomousTaskResult(
                 task_id=normalized_task_id,
                 status="failed",
@@ -92,9 +101,25 @@ class UnifiedAutonomousExecutor:
                 ),
             )
 
+        try:
+            context = ExecutionContext.from_autonomous_action_request(
+                request,
+                run_id=normalized_run_id,
+                task_id=normalized_task_id,
+            )
+        except ExecutionContextError as exc:
+            return AutonomousTaskResult(
+                task_id=normalized_task_id,
+                status="failed",
+                error=(
+                    "autonomous_action_context_invalid: "
+                    f"{exc}"
+                ),
+            )
+
         return self._bridge.execute(
-            normalized_run_id,
-            normalized_task_id,
+            context.run_id,
+            context.task_id,
             request,
         )
 
@@ -103,7 +128,10 @@ class UnifiedAutonomousExecutor:
         value: str,
         field_name: str,
     ) -> str:
-        if not isinstance(value, str):
+        if not isinstance(
+            value,
+            str,
+        ):
             raise TypeError(
                 f"{field_name} must be a string."
             )
@@ -116,3 +144,9 @@ class UnifiedAutonomousExecutor:
             )
 
         return normalized
+
+
+__all__ = [
+    "UnifiedAutonomousExecutor",
+    "UnifiedAutonomousExecutorError",
+]

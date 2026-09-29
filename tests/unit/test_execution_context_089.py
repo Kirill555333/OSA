@@ -1,4 +1,4 @@
-"""0.8.9.1/0.8.9.2 ExecutionContext contract tests."""
+"""0.8.9/0.8.10 execution-context contract tests."""
 
 from __future__ import annotations
 
@@ -188,13 +188,14 @@ def test_explicit_scope_overrides_request_metadata() -> None:
         request,
         run_id="explicit-run",
         task_id="explicit-task",
+        source="explicit-source",
     )
 
     assert context.request_id == "request-explicit"
     assert context.run_id == "explicit-run"
     assert context.task_id == "explicit-task"
     assert context.round_number == 2
-    assert context.source == "metadata-source"
+    assert context.source == "explicit-source"
 
 
 def test_execution_context_does_not_mutate_action_request_metadata() -> None:
@@ -221,3 +222,132 @@ def test_execution_context_does_not_mutate_action_request_metadata() -> None:
         "round": 1,
         "custom": "value",
     }
+
+
+def test_autonomous_context_is_canonical() -> None:
+    request = ActionRequest(
+        kind=ActionKind.TOOL,
+        name="demo",
+        arguments={
+            "value": 42,
+        },
+        request_id="autonomous-context-1",
+    )
+
+    context = ExecutionContext.from_autonomous_action_request(
+        request,
+        run_id="run-089",
+        task_id="task-089",
+    )
+
+    assert context.request_id == "autonomous-context-1"
+    assert context.run_id == "run-089"
+    assert context.task_id == "task-089"
+    assert context.source == "autonomous"
+    assert context.round_number is None
+    assert context.autonomous is True
+    assert context.metadata == {}
+
+
+def test_autonomous_context_does_not_mutate_request() -> None:
+    request = ActionRequest(
+        kind=ActionKind.TOOL,
+        name="demo",
+        arguments={
+            "value": 42,
+        },
+        request_id="autonomous-immutable-1",
+        metadata={
+            "custom": "value",
+        },
+    )
+
+    context = ExecutionContext.from_autonomous_action_request(
+        request,
+        run_id="run-immutable",
+        task_id="task-immutable",
+    )
+
+    assert context.metadata == {
+        "custom": "value",
+    }
+
+    assert request.request_id == "autonomous-immutable-1"
+    assert request.metadata == {
+        "custom": "value",
+    }
+
+
+def test_autonomous_context_does_not_create_round() -> None:
+    request = ActionRequest(
+        kind=ActionKind.TOOL,
+        name="demo",
+        arguments={},
+        request_id="autonomous-round-1",
+        metadata={
+            "round": 1,
+        },
+    )
+
+    with pytest.raises(
+        ExecutionContextError,
+        match="round_number",
+    ):
+        ExecutionContext.from_autonomous_action_request(
+            request,
+            run_id="run-round",
+            task_id="task-round",
+        )
+
+
+@pytest.mark.parametrize(
+    "run_id, task_id",
+    [
+        ("", "task-1"),
+        ("   ", "task-1"),
+        ("run-1", ""),
+        ("run-1", "   "),
+    ],
+)
+def test_autonomous_context_requires_valid_scope(
+    run_id: str,
+    task_id: str,
+) -> None:
+    request = ActionRequest(
+        kind=ActionKind.TOOL,
+        name="demo",
+        arguments={},
+        request_id="autonomous-validation-1",
+    )
+
+    with pytest.raises(
+        ExecutionContextError,
+    ):
+        ExecutionContext.from_autonomous_action_request(
+            request,
+            run_id=run_id,
+            task_id=task_id,
+        )
+
+
+def test_autonomous_context_keeps_action_arguments_out_of_context() -> None:
+    request = ActionRequest(
+        kind=ActionKind.TOOL,
+        name="demo",
+        arguments={
+            "secret": "must-not-be-context",
+            "value": 42,
+        },
+        request_id="autonomous-privacy-1",
+    )
+
+    context = ExecutionContext.from_autonomous_action_request(
+        request,
+        run_id="run-privacy",
+        task_id="task-privacy",
+    )
+
+    assert context.metadata == {}
+    assert "secret" not in context.metadata
+    assert "value" not in context.metadata
+    assert "must-not-be-context" not in str(context)

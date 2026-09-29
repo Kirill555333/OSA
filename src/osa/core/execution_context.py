@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from osa.actions.contracts import ActionRequest
@@ -90,10 +90,10 @@ class ExecutionContext:
     Immutable correlation context surrounding one execution.
 
     `request_id` identifies the unified action.
-    `run_id` and `task_id` optionally identify a broader execution scope.
-    `round_number` is present only for model/tool rounds.
-    `source` identifies the entry path without changing execution semantics.
-    `metadata` contains only non-correlation residual metadata.
+    `run_id` and `task_id` identify a broader execution scope.
+    `round_number` is present only for genuine model/tool rounds.
+    `source` identifies the execution entry path.
+    `metadata` contains only residual, non-correlation metadata.
     """
 
     request_id: str
@@ -186,12 +186,14 @@ class ExecutionContext:
         *,
         run_id: str | None = None,
         task_id: str | None = None,
+        source: str | None = None,
     ) -> "ExecutionContext":
         """
         Extract one canonical context from an ActionRequest.
 
-        Explicit run/task values supplied by the caller take precedence over
-        request metadata. Request identity always comes from ActionRequest.
+        Explicit run/task/source values supplied by the caller take
+        precedence over corresponding request metadata. Request identity
+        always comes from ActionRequest.
 
         Recognized correlation fields are consumed into canonical fields and
         are not duplicated in residual metadata.
@@ -208,6 +210,11 @@ class ExecutionContext:
 
         request_metadata = dict(
             request.metadata
+        )
+
+        request_metadata.pop(
+            "request_id",
+            None,
         )
 
         metadata_run_id = request_metadata.pop(
@@ -251,14 +258,69 @@ class ExecutionContext:
             )
         )
 
+        resolved_source = (
+            source
+            if source is not None
+            else metadata_source
+        )
+
         return cls(
             request_id=request.request_id,
             run_id=resolved_run_id,
             task_id=resolved_task_id,
             round_number=metadata_round,
-            source=metadata_source,
+            source=resolved_source,
             metadata=request_metadata,
         )
+
+    @classmethod
+    def from_autonomous_action_request(
+        cls,
+        request: ActionRequest,
+        *,
+        run_id: str,
+        task_id: str,
+    ) -> "ExecutionContext":
+        """
+        Build the canonical context for one autonomous action.
+
+        Autonomous run/task identifiers are authoritative inputs from the
+        autonomous orchestration layer. The ActionRequest itself remains
+        unchanged.
+        """
+        normalized_run_id = _normalize_identifier(
+            run_id,
+            "run_id",
+        )
+
+        if normalized_run_id is None:
+            raise ExecutionContextError(
+                "run_id is required for autonomous context."
+            )
+
+        normalized_task_id = _normalize_identifier(
+            task_id,
+            "task_id",
+        )
+
+        if normalized_task_id is None:
+            raise ExecutionContextError(
+                "task_id is required for autonomous context."
+            )
+
+        context = cls.from_action_request(
+            request,
+            run_id=normalized_run_id,
+            task_id=normalized_task_id,
+            source="autonomous",
+        )
+
+        if context.round_number is not None:
+            raise ExecutionContextError(
+                "autonomous context cannot contain round_number."
+            )
+
+        return context
 
 
 __all__ = [
