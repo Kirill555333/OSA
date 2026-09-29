@@ -16,6 +16,10 @@ from osa.memory.integration import (
     MemoryIntegration,
     MemoryIntegrationResult,
 )
+from osa.tasks.autonomous import (
+    AutonomousLoop,
+    AutonomousRunReport,
+)
 from osa.recovery import ErrorRecovery, RecoveryConfig
 from osa.memory.automatic import AutomaticMemory
 

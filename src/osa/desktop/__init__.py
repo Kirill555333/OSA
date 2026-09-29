@@ -1,5 +1,10 @@
 """Desktop automation package."""
 
+from osa.desktop.windows import (
+    WindowsDesktopAutomation,
+    WindowsDesktopAutomationConfig,
+)
+
 from osa.desktop.automation import (
     DesktopApplication,
     DesktopAutomationActionError,
@@ -27,5 +32,7 @@ __all__ = [
     "DesktopRect",
     "DesktopWindow",
     "FakeDesktopAutomation",
+    "WindowsDesktopAutomation",
+    "WindowsDesktopAutomationConfig",
     "create_fake_desktop_automation",
 ]
