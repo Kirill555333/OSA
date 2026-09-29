@@ -19,6 +19,7 @@ from osa.core.agent_action_policy import (
     LegacyConfirmationActionHandler,
     LegacyPermissionActionPolicy,
 )
+from osa.core.agent_observability import AgentObservability
 from osa.core.agent_recovery import (
     AgentRecoveryIntegration,
     AgentRecoveryIntegrationError,
@@ -146,6 +147,8 @@ class Agent:
         self._automatic_memory = automatic_memory
         self._recovery_integration = recovery_integration
 
+        self._current_round_number: int | None = None
+
         self._action_router = ActionRouter(
             {
                 ActionKind.TOOL: ToolRegistryActionAdapter(
@@ -171,6 +174,10 @@ class Agent:
 
         self._round_executor = AgentRoundExecutor(
             self._execute_model_tool_call
+        )
+
+        self._observability = AgentObservability(
+            self._log
         )
 
     @property
@@ -352,6 +359,8 @@ class Agent:
                 1,
                 self._max_tool_rounds + 1,
             ):
+                self._current_round_number = round_number
+
                 model_request = ModelRequest(
                     messages=self._model_messages(
                         memory_context
@@ -574,8 +583,16 @@ class Agent:
     ) -> ToolResult:
         """Execute one model tool call through the shared action path."""
         try:
+            metadata = {}
+
+            if self._current_round_number is not None:
+                metadata["round"] = (
+                    self._current_round_number
+                )
+
             request = AgentToolRound.request_from_tool_call(
-                tool_call
+                tool_call,
+                metadata=metadata,
             )
         except AgentToolRoundError as exc:
             raise AgentError(
@@ -605,11 +622,32 @@ class Agent:
         request: ActionRequest,
     ) -> ToolResult:
         """Execute one TOOL ActionRequest through unified infrastructure."""
+        round_number = request.metadata.get(
+            "round"
+        )
+
+        if not isinstance(
+            round_number,
+            int,
+        ):
+            round_number = None
+
+        self._observability.action_requested(
+            request,
+            round_number=round_number,
+        )
+
         recovery_result: RecoveryResult | None = None
 
         if self._recovery_integration is None:
             action_result = self._action_safety_pipeline.dispatch(
                 request
+            )
+
+            self._log_action_outcome(
+                request,
+                action_result,
+                round_number=round_number,
             )
 
             self._raise_for_action_denial(
@@ -622,6 +660,18 @@ class Agent:
                     request
                 )
             except AgentRecoveryIntegrationError as exc:
+                failure_result = ActionResult.failed(
+                    request.request_id,
+                    str(exc),
+                )
+
+                self._observability.action_completed(
+                    request,
+                    failure_result,
+                    recovery=None,
+                    round_number=round_number,
+                )
+
                 raise AgentError(
                     str(exc)
                 ) from exc
@@ -633,6 +683,13 @@ class Agent:
                     underlying,
                     ActionResult,
                 ):
+                    self._log_action_outcome(
+                        request,
+                        underlying,
+                        recovery=recovery_result,
+                        round_number=round_number,
+                    )
+
                     self._raise_for_action_denial(
                         underlying,
                         recovery_result,
@@ -643,10 +700,32 @@ class Agent:
                         recovery_result,
                     )
 
+                failure_result = ActionResult.failed(
+                    request.request_id,
+                    recovery_result.error
+                    or "Tool recovery failed.",
+                )
+
+                self._observability.action_completed(
+                    request,
+                    failure_result,
+                    recovery=recovery_result,
+                    round_number=round_number,
+                )
+
                 if recovery_result.failure_kind in {
                     RecoveryFailureKind.PERMISSION_DENIED,
                     RecoveryFailureKind.CONFIRMATION_DENIED,
                 }:
+                    self._observability.action_denied(
+                        request,
+                        decision=(
+                            recovery_result.failure_kind.value
+                        ),
+                        reason=recovery_result.error,
+                        round_number=round_number,
+                    )
+
                     raise PermissionDeniedError(
                         recovery_result.error
                         or (
@@ -677,11 +756,30 @@ class Agent:
                 recovery_result.result,
                 ActionResult,
             ):
+                failure_result = ActionResult.failed(
+                    request.request_id,
+                    "Unified recovery returned an invalid action result.",
+                )
+
+                self._observability.action_completed(
+                    request,
+                    failure_result,
+                    recovery=recovery_result,
+                    round_number=round_number,
+                )
+
                 raise AgentError(
                     "Unified recovery returned an invalid action result."
                 )
 
             action_result = recovery_result.result
+
+            self._log_action_outcome(
+                request,
+                action_result,
+                recovery=recovery_result,
+                round_number=round_number,
+            )
 
             self._raise_for_action_denial(
                 action_result,
@@ -691,6 +789,52 @@ class Agent:
         return self._tool_result_from_action_result(
             action_result,
             recovery_result,
+        )
+
+    def _log_action_outcome(
+        self,
+        request: ActionRequest,
+        action_result: ActionResult,
+        *,
+        recovery: RecoveryResult | None = None,
+        round_number: int | None = None,
+    ) -> None:
+        """Emit telemetry for an action outcome without changing execution."""
+        stage = action_result.metadata.get(
+            "pipeline_stage"
+        )
+        code = action_result.metadata.get(
+            "pipeline_error"
+        )
+
+        if stage in {
+            "mode",
+            "permission",
+            "safety",
+            "confirmation",
+        } or code in {
+            "not_confirmed",
+            "denied",
+        }:
+            self._observability.action_denied(
+                request,
+                decision=(
+                    str(code)
+                    if code is not None
+                    else str(stage)
+                    if stage is not None
+                    else "denied"
+                ),
+                reason=action_result.error,
+                round_number=round_number,
+            )
+            return
+
+        self._observability.action_completed(
+            request,
+            action_result,
+            recovery=recovery,
+            round_number=round_number,
         )
 
     @staticmethod
@@ -822,6 +966,8 @@ class Agent:
             1,
             self._max_tool_rounds + 1,
         ):
+            self._current_round_number = round_number
+
             request = ModelRequest(
                 messages=self._model_messages(
                     memory_context

@@ -45,6 +45,8 @@ class AgentToolRound:
     def request_from_tool_call(
         cls,
         tool_call: ToolCall,
+        *,
+        metadata: Mapping[str, Any] | None = None,
     ) -> ActionRequest:
         """Convert one model ToolCall into one unified ActionRequest."""
         try:
@@ -60,6 +62,7 @@ class AgentToolRound:
                 tool_call.name,
                 tool_call.arguments,
                 request_id=tool_call.id,
+                metadata=metadata,
             )
         except AgentToolRoundError:
             raise
