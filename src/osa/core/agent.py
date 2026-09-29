@@ -25,6 +25,7 @@ from osa.core.agent_recovery import (
 )
 from osa.core.agent_runtime import (
     AgentRoundExecutor,
+    AgentRoundRuntime,
     AgentRuntimeError,
 )
 from osa.core.agent_stream import AgentStreamAccumulator
@@ -867,11 +868,15 @@ class Agent:
                 round=round_number,
             )
 
-            if not response.tool_calls:
+            round_result = AgentRoundRuntime.from_model_response(
+                response
+            )
+
+            if round_result.completed:
                 self._context.add(
                     ChatMessage(
                         role="assistant",
-                        content=response.content,
+                        content=round_result.content,
                     )
                 )
 
@@ -880,13 +885,13 @@ class Agent:
             self._context.add(
                 ChatMessage(
                     role="assistant",
-                    content=response.content,
-                    tool_calls=response.tool_calls,
+                    content=round_result.content,
+                    tool_calls=round_result.tool_calls,
                 )
             )
 
             executions = self._execute_model_tool_calls(
-                response.tool_calls
+                round_result.tool_calls
             )
 
             for execution in executions:
