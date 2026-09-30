@@ -101,7 +101,7 @@ class AutonomousActionBridge:
             )
 
         try:
-            result = self._pipeline.execute(
+            result = self._dispatch_pipeline(
                 request
             )
         except Exception as exc:
@@ -149,6 +149,38 @@ class AutonomousActionBridge:
                 result.error
                 or "autonomous_action_failed"
             ),
+        )
+
+    def _dispatch_pipeline(
+        self,
+        request: ActionRequest,
+    ) -> ActionResult:
+        """
+        Use the canonical pipeline entry point.
+
+        The execute() fallback preserves compatibility with older test
+        doubles and injected pipeline-like objects.
+        """
+        dispatch = getattr(
+            self._pipeline,
+            "dispatch",
+            None,
+        )
+
+        if callable(dispatch):
+            return dispatch(request)
+
+        execute = getattr(
+            self._pipeline,
+            "execute",
+            None,
+        )
+
+        if callable(execute):
+            return execute(request)
+
+        raise AutonomousActionBridgeError(
+            "pipeline must provide dispatch()."
         )
 
     @staticmethod
