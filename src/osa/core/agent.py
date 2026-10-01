@@ -36,6 +36,7 @@ from osa.core.agent_runtime import (
 from osa.core.agent_stream import AgentStreamAccumulator
 from osa.core.agent_tool_round import AgentToolRound, AgentToolRoundError
 from osa.core.context import ConversationContext
+from osa.context import ContextBudget, ContextManager
 from osa.core.modes import (
     AgentMode,
     AgentModePolicy,
@@ -101,6 +102,8 @@ class Agent:
         automatic_memory: AutomaticMemory | None = None,
         recovery: ErrorRecovery | None = None,
         recovery_integration: AgentRecoveryIntegration | None = None,
+        context_manager: ContextManager | None = None,
+        context_budget: ContextBudget | None = None,
     ) -> None:
         if not 0.0 <= temperature <= 2.0:
             raise ValueError(
@@ -150,6 +153,13 @@ class Agent:
         )
         self._automatic_memory = automatic_memory
         self._recovery_integration = recovery_integration
+        if context_manager is not None:
+            self._context_manager = context_manager
+        else:
+            self._context_manager = ContextManager(
+                budget=context_budget or ContextBudget.create(),
+                default_system_prompt=system_prompt,
+            )
 
         self._current_round_number: int | None = None
 
@@ -216,6 +226,11 @@ class Agent:
     def context(self) -> ConversationContext:
         """Return the current conversation context."""
         return self._context
+
+    @property
+    def context_manager(self) -> ContextManager:
+        """Return the context manager used by the agent."""
+        return self._context_manager
 
     @property
     def tools(self) -> ToolRegistry:
@@ -364,7 +379,8 @@ class Agent:
 
                 model_request = ModelRequest(
                     messages=self._model_messages(
-                        memory_context
+                        memory_context,
+                        tools=self._available_tool_definitions(),
                     ),
                     temperature=self._temperature,
                     max_tokens=self._max_tokens,
@@ -502,6 +518,8 @@ class Agent:
 
         if system_message is not None:
             self._context.add(system_message)
+
+        self._context_manager.reset()
 
     def _capture_automatic_memory(
         self,
@@ -1026,7 +1044,8 @@ class Agent:
 
             request = ModelRequest(
                 messages=self._model_messages(
-                    memory_context
+                    memory_context,
+                    tools=self._available_tool_definitions(),
                 ),
                 temperature=self._temperature,
                 max_tokens=self._max_tokens,
@@ -1176,32 +1195,18 @@ class Agent:
     def _model_messages(
         self,
         memory_context: str | None,
+        *,
+        task_context: str | None = None,
+        tools: tuple[ToolDefinition, ...] = (),
     ) -> tuple[ChatMessage, ...]:
-        """Build the transient model context for one request."""
-        messages = self._context.messages()
-
-        if not memory_context:
-            return messages
-
-        memory_message = ChatMessage(
-            role="system",
-            content=memory_context,
+        """Build the bounded model context for one request using ContextManager."""
+        assembled = self._context_manager.assemble(
+            self._context.messages(),
+            task_context=task_context,
+            tools=tools,
+            override_memory_context=memory_context,
         )
-
-        if (
-            messages
-            and messages[0].role == "system"
-        ):
-            return (
-                messages[0],
-                memory_message,
-                *messages[1:],
-            )
-
-        return (
-            memory_message,
-            *messages,
-        )
+        return assembled.messages
 
     @staticmethod
     def _tool_result_content(
