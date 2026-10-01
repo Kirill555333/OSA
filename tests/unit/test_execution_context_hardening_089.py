@@ -213,9 +213,7 @@ def test_request_identity_always_remains_authoritative() -> None:
         "authoritative-request"
     )
 
-    assert context.metadata == {
-        "request_id": "spoofed-request",
-    }
+    assert context.metadata == {}
 
 
 def test_explicit_none_does_not_erase_request_metadata() -> None:
