@@ -1,8 +1,11 @@
+"""Tool layer for OSA."""
+
+from osa.tools.browser import BrowserFetchTool
 from osa.tools.browser_automation import (
     BrowserClickTool,
     BrowserFindTool,
-    BrowserOpenTool,
     BrowserObserveTool,
+    BrowserOpenTool,
     BrowserPressTool,
     BrowserReadTool,
     BrowserScreenshotTool,
@@ -10,19 +13,16 @@ from osa.tools.browser_automation import (
     BrowserWaitTool,
     create_browser_action_tools,
 )
-
-from osa.tools.browser import BrowserFetchTool
-"""Tool layer for OSA."""
-
 from osa.tools.calculator import CalculatorTool
-from osa.tools.system import SystemInfoTool
-from osa.tools.filesystem import WriteFileTool
 from osa.tools.filesystem import (
     FileExistsTool,
     FilesystemToolError,
+    FindFilesTool,
     ListDirectoryTool,
+    PatchFileTool,
     ReadFileTool,
     SafeFilesystem,
+    WriteFileTool,
 )
 from osa.tools.memory import (
     ForgetTool,
@@ -35,25 +35,45 @@ from osa.tools.registry import (
     ToolRegistry,
     ToolResult,
 )
+from osa.tools.research import WebResearchTool
+from osa.tools.shell import (
+    SafeShell,
+    SafeShellError,
+    TerminalExecuteTool,
+)
+from osa.tools.system import SystemInfoTool
 
 __all__ = [
-    "WebResearchTool",
+    "BrowserClickTool",
     "BrowserFetchTool",
+    "BrowserFindTool",
+    "BrowserObserveTool",
+    "BrowserOpenTool",
+    "BrowserPressTool",
+    "BrowserReadTool",
+    "BrowserScreenshotTool",
+    "BrowserTypeTool",
+    "BrowserWaitTool",
     "CalculatorTool",
     "FileExistsTool",
     "FilesystemToolError",
-    "SystemInfoTool"
+    "FindFilesTool",
     "ForgetTool",
     "ListDirectoryTool",
+    "PatchFileTool",
     "ReadFileTool",
     "RecallTool",
     "RememberTool",
     "SafeFilesystem",
+    "SafeShell",
+    "SafeShellError",
+    "SystemInfoTool",
+    "TerminalExecuteTool",
     "ToolError",
     "ToolInterface",
     "ToolRegistry",
     "ToolResult",
+    "WebResearchTool",
     "WriteFileTool",
+    "create_browser_action_tools",
 ]
-
-from osa.tools.research import WebResearchTool

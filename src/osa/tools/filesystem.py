@@ -1,4 +1,4 @@
-"""Safe read-only filesystem tools for OSA."""
+"""Safe filesystem tools for OSA."""
 
 from __future__ import annotations
 
@@ -74,6 +74,29 @@ class SafeFilesystem:
             self._display_path(entry)
             for entry in entries
         ]
+
+    def find_files(
+        self,
+        pattern: str = "*",
+        requested_path: str = ".",
+        *,
+        max_results: int = 50,
+    ) -> list[str]:
+        """Search for files matching a glob pattern."""
+        if max_results <= 0:
+            raise ValueError("max_results must be greater than zero.")
+
+        directory = self.resolve_path(requested_path)
+        if not directory.exists() or not directory.is_dir():
+            raise NotADirectoryError(f"Directory does not exist: {requested_path}")
+
+        matches: list[str] = []
+        for entry in sorted(directory.glob(pattern)):
+            if len(matches) >= max_results:
+                break
+            matches.append(self._display_path(entry))
+
+        return matches
 
     def read_file(
         self,
@@ -159,6 +182,32 @@ class SafeFilesystem:
 
         return written
 
+    def patch_file(
+        self,
+        requested_path: str,
+        target: str,
+        replacement: str,
+        *,
+        count: int = 1,
+    ) -> int:
+        """Replace target text with replacement text in an existing file."""
+        if not target:
+            raise ValueError("target text cannot be empty.")
+        if count <= 0:
+            raise ValueError("count must be greater than zero.")
+
+        file_path = self.resolve_path(requested_path)
+        if not file_path.exists() or not file_path.is_file():
+            raise FileNotFoundError(f"File does not exist: {requested_path}")
+
+        content = file_path.read_text(encoding="utf-8")
+        if target not in content:
+            raise FilesystemToolError(f"Target text was not found in file: '{requested_path}'")
+
+        new_content = content.replace(target, replacement, count)
+        file_path.write_text(new_content, encoding="utf-8")
+        return len(new_content)
+
     def _display_path(self, path: Path) -> str:
         """Return a workspace-relative display path."""
         relative = path.relative_to(self._root)
@@ -177,17 +226,14 @@ class ListDirectoryTool(ToolInterface):
 
     @property
     def name(self) -> str:
-        """Return the unique tool name."""
         return "list_directory"
 
     @property
     def description(self) -> str:
-        """Return a human-readable tool description."""
         return "List files and directories inside the OSA workspace."
 
     @property
     def parameters(self) -> Mapping[str, Any]:
-        """Return the JSON schema for tool arguments."""
         return {
             "type": "object",
             "properties": {
@@ -207,7 +253,6 @@ class ListDirectoryTool(ToolInterface):
         self,
         arguments: Mapping[str, Any],
     ) -> ToolResult:
-        """List directory contents."""
         path = arguments.get("path", ".")
 
         if not isinstance(path, str):
@@ -241,6 +286,67 @@ class ListDirectoryTool(ToolInterface):
         )
 
 
+class FindFilesTool(ToolInterface):
+    """Find files matching a glob pattern."""
+
+    def __init__(self, filesystem: SafeFilesystem) -> None:
+        self._filesystem = filesystem
+
+    @property
+    def name(self) -> str:
+        return "find_files"
+
+    @property
+    def description(self) -> str:
+        return "Find files matching a glob pattern inside the OSA workspace."
+
+    @property
+    def parameters(self) -> Mapping[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Glob pattern (e.g. '*.py', '**/*desktop*').",
+                    "default": "*",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Search directory inside workspace (default: '.').",
+                    "default": ".",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum results to return.",
+                    "default": 50,
+                },
+            },
+            "additionalProperties": False,
+        }
+
+    def execute(self, arguments: Mapping[str, Any]) -> ToolResult:
+        pattern = arguments.get("pattern", "*")
+        path = arguments.get("path", ".")
+        max_results = arguments.get("max_results", 50)
+
+        if not isinstance(pattern, str):
+            return ToolResult(success=False, error="Argument 'pattern' must be a string.")
+        if not isinstance(path, str):
+            return ToolResult(success=False, error="Argument 'path' must be a string.")
+        if not isinstance(max_results, int) or isinstance(max_results, bool):
+            return ToolResult(success=False, error="Argument 'max_results' must be an integer.")
+
+        try:
+            matches = self._filesystem.find_files(pattern, path, max_results=max_results)
+        except Exception as exc:
+            return ToolResult(success=False, error=str(exc))
+
+        if not matches:
+            return ToolResult(success=True, output="No matching files found.")
+
+        return ToolResult(success=True, output="\n".join(matches))
+
+
 class ReadFileTool(ToolInterface):
     """Read text files inside the OSA workspace."""
 
@@ -249,18 +355,14 @@ class ReadFileTool(ToolInterface):
 
     @property
     def name(self) -> str:
-        """Return the unique tool name."""
         return "read_file"
 
     @property
     def description(self) -> str:
-        """Return the contents of a UTF-8 text file inside the OSA workspace."""
-
         return "Read a UTF-8 text file inside the OSA workspace."
 
     @property
     def parameters(self) -> Mapping[str, Any]:
-        """Return the JSON schema for tool arguments."""
         return {
             "type": "object",
             "properties": {
@@ -284,7 +386,6 @@ class ReadFileTool(ToolInterface):
         self,
         arguments: Mapping[str, Any],
     ) -> ToolResult:
-        """Read a UTF-8 text file."""
         path = arguments.get("path")
         max_characters = arguments.get(
             "max_characters",
@@ -337,17 +438,14 @@ class FileExistsTool(ToolInterface):
 
     @property
     def name(self) -> str:
-        """Return the unique tool name."""
         return "file_exists"
 
     @property
     def description(self) -> str:
-        """Return a human-readable existence check."""
         return "Check whether a file or directory exists in the OSA workspace."
 
     @property
     def parameters(self) -> Mapping[str, Any]:
-        """Return the JSON schema for tool arguments."""
         return {
             "type": "object",
             "properties": {
@@ -364,7 +462,6 @@ class FileExistsTool(ToolInterface):
         self,
         arguments: Mapping[str, Any],
     ) -> ToolResult:
-        """Check path existence."""
         path = arguments.get("path")
 
         if not isinstance(path, str):
@@ -388,6 +485,8 @@ class FileExistsTool(ToolInterface):
             success=True,
             output="true" if exists else "false",
         )
+
+
 class WriteFileTool(ToolInterface):
     """Write UTF-8 text files inside the OSA workspace."""
 
@@ -399,12 +498,10 @@ class WriteFileTool(ToolInterface):
 
     @property
     def name(self) -> str:
-        """Return the unique tool name."""
         return "write_file"
 
     @property
     def description(self) -> str:
-        """Return a human-readable tool description."""
         return (
             "Write UTF-8 text to a file inside the OSA workspace. "
             "Existing files require overwrite=true."
@@ -412,27 +509,20 @@ class WriteFileTool(ToolInterface):
 
     @property
     def parameters(self) -> Mapping[str, Any]:
-        """Return the JSON schema for tool arguments."""
         return {
             "type": "object",
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": (
-                        "Workspace-relative file path."
-                    ),
+                    "description": "Workspace-relative file path.",
                 },
                 "content": {
                     "type": "string",
-                    "description": (
-                        "UTF-8 text content to write."
-                    ),
+                    "description": "UTF-8 text content to write.",
                 },
                 "overwrite": {
                     "type": "boolean",
-                    "description": (
-                        "Allow replacing an existing file."
-                    ),
+                    "description": "Allow replacing an existing file.",
                     "default": False,
                 },
             },
@@ -447,7 +537,6 @@ class WriteFileTool(ToolInterface):
         self,
         arguments: Mapping[str, Any],
     ) -> ToolResult:
-        """Write a UTF-8 text file."""
         path = arguments.get("path")
         content = arguments.get("content")
         overwrite = arguments.get(
@@ -503,4 +592,72 @@ class WriteFileTool(ToolInterface):
                 "characters_written": characters_written,
                 "overwritten": overwrite,
             },
+        )
+
+
+class PatchFileTool(ToolInterface):
+    """Replace target text in an existing file."""
+
+    def __init__(self, filesystem: SafeFilesystem) -> None:
+        self._filesystem = filesystem
+
+    @property
+    def name(self) -> str:
+        return "patch_file"
+
+    @property
+    def description(self) -> str:
+        return "Replace target text in an existing file inside the OSA workspace."
+
+    @property
+    def parameters(self) -> Mapping[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Workspace-relative file path.",
+                },
+                "target": {
+                    "type": "string",
+                    "description": "Exact text to find and replace.",
+                },
+                "replacement": {
+                    "type": "string",
+                    "description": "New replacement text.",
+                },
+                "count": {
+                    "type": "integer",
+                    "description": "Maximum number of replacements (default: 1).",
+                    "default": 1,
+                },
+            },
+            "required": ["path", "target", "replacement"],
+            "additionalProperties": False,
+        }
+
+    def execute(self, arguments: Mapping[str, Any]) -> ToolResult:
+        path = arguments.get("path")
+        target = arguments.get("target")
+        replacement = arguments.get("replacement")
+        count = arguments.get("count", 1)
+
+        if not isinstance(path, str):
+            return ToolResult(success=False, error="Argument 'path' must be a string.")
+        if not isinstance(target, str):
+            return ToolResult(success=False, error="Argument 'target' must be a string.")
+        if not isinstance(replacement, str):
+            return ToolResult(success=False, error="Argument 'replacement' must be a string.")
+        if not isinstance(count, int) or isinstance(count, bool):
+            return ToolResult(success=False, error="Argument 'count' must be an integer.")
+
+        try:
+            new_size = self._filesystem.patch_file(path, target, replacement, count=count)
+        except Exception as exc:
+            return ToolResult(success=False, error=str(exc))
+
+        return ToolResult(
+            success=True,
+            output=f"File '{path}' successfully patched ({new_size} bytes).",
+            metadata={"path": path, "new_size": new_size},
         )
