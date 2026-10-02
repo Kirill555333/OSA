@@ -1,24 +1,61 @@
-"""Local model backend using the llama.cpp HTTP server."""
+"""Local llama.cpp inference client with multimodal vision and robust tool calling."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-
+import base64
+from dataclasses import dataclass
 import http.client
 import json
-from dataclasses import dataclass
-from urllib.parse import urlsplit
+from pathlib import Path
+import re
+from typing import Any
+import urllib.parse
 
 from osa.models.interface import (
     ChatMessage,
-    ModelConnectionError,
+    ModelError,
     ModelInterface,
     ModelRequest,
     ModelResponse,
-    ModelStreamEvent,
     ModelResponseError,
     ToolCall,
 )
+
+COMMON_APP_MAP: dict[str, str] = {
+    "телеграм": "Telegram",
+    "телеграма": "Telegram",
+    "телеграме": "Telegram",
+    "telegram": "Telegram",
+    "тг": "Telegram",
+    "хром": "Google Chrome",
+    "хрома": "Google Chrome",
+    "хроме": "Google Chrome",
+    "chrome": "Google Chrome",
+    "google chrome": "Google Chrome",
+    "браузер": "Google Chrome",
+    "калькулятор": "Calculator",
+    "калькулятора": "Calculator",
+    "calculator": "Calculator",
+    "терминал": "Terminal",
+    "terminal": "Terminal",
+    "сафари": "Safari",
+    "safari": "Safari",
+    "музыка": "Music",
+    "finder": "Finder",
+}
+
+
+def extract_app_from_text(text: str) -> str:
+    """Extract known application name from user query."""
+    text_lower = text.lower()
+    for alias, standard_name in COMMON_APP_MAP.items():
+        if alias in text_lower:
+            return standard_name
+    return "Google Chrome"
+
+
+class ModelConnectionError(ModelError):
+    """Raised when communication with llama.cpp fails."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,173 +63,126 @@ class LlamaCppConfig:
     """Connection settings for a local llama.cpp server."""
 
     base_url: str = "http://127.0.0.1:8080"
-    timeout: float = 120.0
+    timeout: float = 60.0
 
     @property
     def chat_url(self) -> str:
-        """Return the OpenAI-compatible chat completion URL."""
         return f"{self.base_url.rstrip('/')}/v1/chat/completions"
 
     @property
     def health_url(self) -> str:
-        """Return the llama.cpp health endpoint URL."""
         return f"{self.base_url.rstrip('/')}/health"
 
 
 class _PersistentHttpClient:
-    """Small stdlib HTTP client that reuses one TCP connection."""
+    """HTTP client reusing persistent connection."""
 
-    def __init__(
-        self,
-        base_url: str,
-        timeout: float,
-    ) -> None:
-        parsed = urlsplit(base_url)
-
-        if parsed.scheme not in {"http", "https"}:
-            raise ValueError(
-                "base_url must use http or https."
-            )
-
-        if not parsed.hostname:
-            raise ValueError(
-                "base_url must contain a hostname."
-            )
-
-        self._scheme = parsed.scheme
-        self._host = parsed.hostname
-        self._port = parsed.port
+    def __init__(self, base_url: str, timeout: float = 60.0) -> None:
+        self._parsed = urllib.parse.urlsplit(base_url)
         self._timeout = timeout
         self._connection: http.client.HTTPConnection | None = None
 
-    def _get_connection(
-        self,
-    ) -> http.client.HTTPConnection:
-        if self._connection is not None:
-            return self._connection
-
-        if self._scheme == "https":
-            self._connection = http.client.HTTPSConnection(
-                self._host,
-                self._port,
-                timeout=self._timeout,
-            )
-        else:
+    def _get_connection(self) -> http.client.HTTPConnection:
+        if self._connection is None:
+            host = self._parsed.hostname or "127.0.0.1"
+            port = self._parsed.port or 8080
             self._connection = http.client.HTTPConnection(
-                self._host,
-                self._port,
+                host=host,
+                port=port,
                 timeout=self._timeout,
             )
-
         return self._connection
 
-    def request(
-        self,
-        method: str,
-        target: str,
-        *,
-        body: bytes | None = None,
-        headers: dict[str, str] | None = None,
-    ) -> http.client.HTTPResponse:
-        """Send one request, retrying once after a broken connection."""
-        last_error: Exception | None = None
-
-        for attempt in range(2):
-            connection = self._get_connection()
-
-            try:
-                connection.request(
-                    method,
-                    target,
-                    body=body,
-                    headers=headers or {},
-                )
-
-                return connection.getresponse()
-
-            except (
-                http.client.HTTPException,
-                ConnectionError,
-                TimeoutError,
-                OSError,
-            ) as exc:
-                last_error = exc
-                self.close()
-
-                if attempt == 0:
-                    continue
-
-                raise
-
-        assert last_error is not None
-        raise last_error
+    def request(self, method: str, url: str, body: bytes | None, headers: dict[str, str]) -> http.client.HTTPResponse:
+        conn = self._get_connection()
+        try:
+            conn.request(method, url, body=body, headers=headers)
+            return conn.getresponse()
+        except Exception:
+            self.close()
+            conn = self._get_connection()
+            conn.request(method, url, body=body, headers=headers)
+            return conn.getresponse()
 
     def close(self) -> None:
-        """Close the persistent connection when requested."""
         if self._connection is not None:
-            self._connection.close()
+            try:
+                self._connection.close()
+            except Exception:
+                pass
             self._connection = None
 
 
-
 class LlamaCppModel(ModelInterface):
-    """OSA adapter for a llama.cpp HTTP server."""
+    """LLM client for llama.cpp server supporting text, vision, and robust tool calls."""
 
     def __init__(self, config: LlamaCppConfig | None = None) -> None:
         self._config = config or LlamaCppConfig()
-        self._model_name = "llama.cpp-local"
         self._http_client = _PersistentHttpClient(
-            self._config.base_url,
-            self._config.timeout,
+            base_url=self._config.base_url,
+            timeout=self._config.timeout,
         )
-
-        self._chat_target = self._url_target(
-            self._config.chat_url
-        )
-        self._health_target = self._url_target(
-            self._config.health_url
-        )
+        parsed = urllib.parse.urlsplit(self._config.chat_url)
+        self._chat_target = parsed.path or "/v1/chat/completions"
+        self._last_user_query = ""
 
     @property
     def model_name(self) -> str:
-        """Return the adapter name."""
-        return self._model_name
+        return "qwen2.5-vl-3b"
 
-    def health_check(self) -> bool:
-        """Check whether the llama.cpp server is ready."""
-        response = None
+    def _serialize_message(self, message: ChatMessage) -> dict[str, Any]:
+        """Convert message to OpenAI-compatible format, encoding images if marker present."""
+        data: dict[str, Any] = {"role": message.role}
 
-        try:
-            response = self._http_client.request(
-                "GET",
-                self._health_target,
-            )
-            response.read()
-            return response.status == 200
+        if message.role == "user":
+            self._last_user_query = str(message.content)
 
-        except (
-            http.client.HTTPException,
-            ConnectionError,
-            TimeoutError,
-            OSError,
-        ):
-            self._http_client.close()
-            return False
+        match = re.search(r"\[image_path:\s*([^\]]+)\]", str(message.content))
+        if match:
+            img_path = Path(match.group(1).strip())
+            if img_path.exists():
+                img_bytes = img_path.read_bytes()
+                b64_img = base64.b64encode(img_bytes).decode("utf-8")
+                clean_text = re.sub(r"\[image_path:\s*[^\]]+\]\n?", "", message.content).strip()
+                data["content"] = [
+                    {"type": "text", "text": clean_text or "What is visible on this screen?"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{b64_img}"},
+                    },
+                ]
+            else:
+                data["content"] = message.content
+        else:
+            data["content"] = message.content
 
-        finally:
-            if response is not None:
-                response.close()
+        if message.tool_call_id is not None:
+            data["tool_call_id"] = message.tool_call_id
+
+        if message.tool_calls:
+            data["tool_calls"] = [
+                {
+                    "type": "function",
+                    "id": tool_call.id,
+                    "function": {
+                        "name": tool_call.name,
+                        "arguments": json.dumps(dict(tool_call.arguments)),
+                    },
+                }
+                for tool_call in message.tool_calls
+            ]
+
+        return data
 
     def generate(self, request_data: ModelRequest) -> ModelResponse:
-        """Send a chat completion request to llama.cpp."""
-        payload = {
-            "messages": [
-                self._serialize_message(message)
-                for message in request_data.messages
-            ],
+        """Send chat completion to llama-server."""
+        payload: dict[str, Any] = {
+            "messages": [self._serialize_message(msg) for msg in request_data.messages],
             "temperature": request_data.temperature,
             "max_tokens": request_data.max_tokens,
             "stream": False,
+            "stop": ["<|im_end|>", "<|endoftext|>", "<|im_start|>"],
+            "chat_template_kwargs": {"thinking": False},
         }
 
         if request_data.tools:
@@ -209,401 +199,144 @@ class LlamaCppModel(ModelInterface):
             ]
 
         body = json.dumps(payload).encode("utf-8")
-
-        response = None
+        resp = None
 
         try:
-            response = self._http_client.request(
+            resp = self._http_client.request(
                 "POST",
                 self._chat_target,
                 body=body,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
+                headers={"Content-Type": "application/json", "Accept": "application/json"},
             )
-
-            response_body = response.read().decode(
-                "utf-8"
-            )
-
-        except (
-            http.client.HTTPException,
-            ConnectionError,
-            TimeoutError,
-            OSError,
-        ) as exc:
+            resp_body = resp.read().decode("utf-8")
+        except Exception as exc:
             self._http_client.close()
-
-            raise ModelConnectionError(
-                f"Failed to contact llama.cpp server: {exc}"
-            ) from exc
-
+            raise ModelConnectionError(f"Failed to contact llama.cpp server: {exc}") from exc
         finally:
-            if response is not None:
-                response.close()
+            if resp is not None:
+                resp.close()
 
-        return self._parse_response(response_body)
-
-    def generate_stream(
-        self,
-        request_data: ModelRequest,
-    ) -> Iterator[str]:
-        """Stream generated text from the llama.cpp server."""
-        if request_data.tools:
-            raise ModelResponseError(
-                "Streaming with tool calls requires generate_stream_events()."
-            )
-
-        for event in self.generate_stream_events(
-            request_data
-        ):
-            if event.content:
-                yield event.content
-
-    def generate_stream_events(
-        self,
-        request_data: ModelRequest,
-    ) -> Iterator[ModelStreamEvent]:
-        """Stream text and tool-call events from llama.cpp."""
-        payload: dict[str, object] = {
-            "model": self.model_name,
-            "messages": [
-                self._serialize_message(message)
-                for message in request_data.messages
-            ],
-            "temperature": request_data.temperature,
-            "max_tokens": request_data.max_tokens,
-            "stream": True,
-        }
-
-        if request_data.tools:
-            payload["tools"] = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": dict(tool.parameters),
-                    },
-                }
-                for tool in request_data.tools
-            ]
-
-        data = json.dumps(payload).encode("utf-8")
-
-        tool_calls: dict[
-            int,
-            dict[str, str],
-        ] = {}
-
-        response = None
-
-        try:
-            response = self._http_client.request(
-                "POST",
-                self._chat_target,
-                body=data,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "text/event-stream",
-                },
-            )
-
-            for raw_line in response:
-                line = (
-                    raw_line.decode(
-                        "utf-8",
-                        errors="replace",
-                    )
-                    if isinstance(raw_line, bytes)
-                    else raw_line
-                )
-
-                line = line.strip()
-
-                if not line or not line.startswith("data:"):
-                    continue
-
-                event_data = line[5:].strip()
-
-                if event_data == "[DONE]":
-                    break
-
-                try:
-                    chunk = json.loads(event_data)
-                except json.JSONDecodeError as exc:
-                    raise ModelResponseError(
-                        "Received invalid JSON in model stream."
-                    ) from exc
-
-                choices = chunk.get("choices", [])
-
-                if not isinstance(choices, list) or not choices:
-                    continue
-
-                choice = choices[0]
-
-                if not isinstance(choice, dict):
-                    continue
-
-                delta = choice.get("delta", {})
-
-                if not isinstance(delta, dict):
-                    continue
-
-                content = delta.get("content")
-
-                if isinstance(content, str) and content:
-                    yield ModelStreamEvent(
-                        content=content
-                    )
-
-                raw_tool_calls = delta.get(
-                    "tool_calls",
-                    [],
-                )
-
-                if isinstance(raw_tool_calls, list):
-                    for raw_tool_call in raw_tool_calls:
-                        if not isinstance(
-                            raw_tool_call,
-                            dict,
-                        ):
-                            continue
-
-                        index = raw_tool_call.get(
-                            "index",
-                            0,
-                        )
-
-                        if not isinstance(index, int):
-                            continue
-
-                        current = tool_calls.setdefault(
-                            index,
-                            {
-                                "id": "",
-                                "name": "",
-                                "arguments": "",
-                            },
-                        )
-
-                        call_id = raw_tool_call.get("id")
-
-                        if isinstance(call_id, str):
-                            current["id"] += (
-                                call_id
-                                if not current["id"]
-                                else ""
-                            )
-
-                        function = raw_tool_call.get(
-                            "function",
-                            {},
-                        )
-
-                        if not isinstance(
-                            function,
-                            dict,
-                        ):
-                            continue
-
-                        name = function.get("name")
-
-                        if isinstance(name, str):
-                            current["name"] += (
-                                name
-                                if not current["name"]
-                                else ""
-                            )
-
-                        arguments = function.get(
-                            "arguments"
-                        )
-
-                        if isinstance(
-                            arguments,
-                            str,
-                        ):
-                            current["arguments"] += arguments
-
-            parsed_tool_calls: list[ToolCall] = []
-
-            for index in sorted(tool_calls):
-                raw = tool_calls[index]
-
-                if not raw["id"]:
-                    raise ModelResponseError(
-                        f"Tool call {index} is missing its ID."
-                    )
-
-                if not raw["name"]:
-                    raise ModelResponseError(
-                        f"Tool call {index} is missing its name."
-                    )
-
-                try:
-                    arguments = json.loads(
-                        raw["arguments"] or "{}"
-                    )
-                except json.JSONDecodeError as exc:
-                    raise ModelResponseError(
-                        "Tool call arguments are not valid JSON."
-                    ) from exc
-
-                if not isinstance(arguments, dict):
-                    raise ModelResponseError(
-                        "Tool call arguments must be a JSON object."
-                    )
-
-                parsed_tool_calls.append(
-                    ToolCall(
-                        id=raw["id"],
-                        name=raw["name"],
-                        arguments=arguments,
-                    )
-                )
-
-            if parsed_tool_calls:
-                yield ModelStreamEvent(
-                    tool_calls=tuple(
-                        parsed_tool_calls
-                    ),
-                    finish_reason="tool_calls",
-                )
-
-        except ModelResponseError:
-            self._http_client.close()
-            raise
-
-        except (
-            http.client.HTTPException,
-            ConnectionError,
-            TimeoutError,
-            OSError,
-        ) as exc:
-            self._http_client.close()
-
-            raise ModelConnectionError(
-                f"Could not connect to model server: {exc}"
-            ) from exc
-
-        finally:
-            if response is not None:
-                response.close()
-
-    @staticmethod
-    def _url_target(url: str) -> str:
-        """Convert a full URL into an HTTP request target."""
-        parsed = urlsplit(url)
-        target = parsed.path or "/"
-
-        if parsed.query:
-            target += f"?{parsed.query}"
-
-        return target
-
-    @staticmethod
-    def _serialize_message(message: ChatMessage) -> dict[str, object]:
-        """Convert an OSA message into the API message format."""
-        data: dict[str, object] = {
-            "role": message.role,
-            "content": message.content,
-        }
-
-        if message.tool_call_id is not None:
-            data["tool_call_id"] = message.tool_call_id
-
-        if message.tool_calls:
-            data["tool_calls"] = [
-                {
-                    "type": "function",
-                    "id": tool_call.id,
-                    "function": {
-                        "name": tool_call.name,
-                        "arguments": json.dumps(
-                            dict(tool_call.arguments),
-                            ensure_ascii=False,
-                        ),
-                    },
-                }
-                for tool_call in message.tool_calls
-            ]
-
-        return data
+        return self._parse_response(resp_body)
 
     def _parse_response(self, response_body: str) -> ModelResponse:
-        """Parse a llama.cpp chat completion response."""
         try:
             data = json.loads(response_body)
             choice = data["choices"][0]
             message = choice["message"]
-        except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
-            raise ModelResponseError(
-                "llama.cpp returned an unexpected response format."
-            ) from exc
+        except Exception as exc:
+            raise ModelResponseError(f"llama.cpp invalid response: {response_body[:300]}") from exc
 
-        try:
-            raw_tool_calls = message.get("tool_calls", [])
+        tool_calls: list[ToolCall] = []
+        raw_tool_calls = message.get("tool_calls", [])
 
-            if not isinstance(raw_tool_calls, list):
-                raise ModelResponseError(
-                    "llama.cpp returned invalid tool_calls data."
-                )
+        # 1. Standard OpenAI function calling structure
+        if isinstance(raw_tool_calls, list) and raw_tool_calls:
+            for tc in raw_tool_calls:
+                fn = tc.get("function", {})
+                args = fn.get("arguments", {})
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except Exception:
+                        args = {}
+                name = str(fn.get("name", "")).strip()
+                if name:
+                    tool_calls.append(
+                        ToolCall(
+                            id=str(tc.get("id", f"call_{len(tool_calls)+1}")),
+                            name=name,
+                            arguments=args if isinstance(args, dict) else {},
+                        )
+                    )
 
-            tool_calls = tuple(
-                self._parse_tool_call(tool_call)
-                for tool_call in raw_tool_calls
-            )
-        except (KeyError, TypeError, json.JSONDecodeError) as exc:
-            raise ModelResponseError(
-                "llama.cpp returned an invalid tool call."
-            ) from exc
+        content = str(message.get("content") or message.get("reasoning_content") or "").strip()
+
+        # 2. Parse Qwen <tool_call> tags: <tool_call>{"name": ..., "arguments": ...}</tool_call>
+        if "<tool_call>" in content:
+            tc_matches = re.findall(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", content, flags=re.DOTALL)
+            for block in tc_matches:
+                try:
+                    parsed = json.loads(block)
+                    name = str(parsed.get("name") or parsed.get("tool") or "").strip()
+                    args = parsed.get("arguments") or parsed.get("parameters") or {}
+                    if name:
+                        tool_calls.append(
+                            ToolCall(
+                                id=f"call_tag_{len(tool_calls)+1}",
+                                name=name,
+                                arguments=args if isinstance(args, dict) else {},
+                            )
+                        )
+                except Exception:
+                    pass
+            content = re.sub(r"<tool_call>.*?</tool_call>", "", content, flags=re.DOTALL).strip()
+
+        # 3. Parse JSON markdown code blocks: ```json {"tool": ..., ...} ```
+        if not tool_calls and "```" in content:
+            json_blocks = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", content, flags=re.DOTALL)
+            for block in json_blocks:
+                try:
+                    parsed = json.loads(block)
+                    name = str(parsed.get("name") or parsed.get("tool") or "").strip()
+                    args = parsed.get("arguments") or parsed.get("parameters") or {}
+                    if name:
+                        tool_calls.append(
+                            ToolCall(
+                                id=f"call_block_{len(tool_calls)+1}",
+                                name=name,
+                                arguments=args if isinstance(args, dict) else {},
+                            )
+                        )
+                except Exception:
+                    pass
+            if tool_calls:
+                content = re.sub(r"```(?:json)?\s*\{.*?\}\s*```", "", content, flags=re.DOTALL).strip()
+
+        # 4. Fallback text intent parsing for common patterns
+        if not tool_calls and content:
+            if "open_url" in content:
+                m = re.search(r"open_url(?:\s*\(|\s+)(?:url=)?[\"']?([^\"'\)\s]+)[\"']?", content)
+                url = m.group(1).strip() if m else "https://google.com"
+                tool_calls.append(ToolCall(id="call_auto_url", name="open_url", arguments={"url": url}))
+                content = ""
+            elif "launch_application" in content:
+                m = re.search(r"launch_application(?:\s*\(|\s+)(?:application_name=)?[\"']?([^\"'\)\n\r]+)[\"']?", content)
+                app = m.group(1).strip() if m else extract_app_from_text(self._last_user_query)
+                tool_calls.append(ToolCall(id="call_auto_launch", name="launch_application", arguments={"application_name": app}))
+                content = ""
+            elif "close_application" in content:
+                m = re.search(r"close_application(?:\s*\(|\s+)(?:application_name=)?[\"']?([^\"'\)\n\r]+)[\"']?", content)
+                app = m.group(1).strip() if m else extract_app_from_text(self._last_user_query)
+                tool_calls.append(ToolCall(id="call_auto_close", name="close_application", arguments={"application_name": app}))
+                content = ""
+            elif "type_text" in content:
+                m = re.search(r"type_text(?:\s*\(|\s+)(?:text=)?[\"']?([^\"'\)\n\r]+)[\"']?", content)
+                txt = m.group(1).strip() if m else ""
+                if txt:
+                    tool_calls.append(ToolCall(id="call_auto_type", name="type_text", arguments={"text": txt}))
+                    content = ""
+            elif "press_key" in content:
+                m = re.search(r"press_key(?:\s*\(|\s+)(?:key=)?[\"']?([^\"'\)\s]+)[\"']?", content)
+                k = m.group(1).strip() if m else "enter"
+                tool_calls.append(ToolCall(id="call_auto_press", name="press_key", arguments={"key": k}))
+                content = ""
+            elif "set_volume" in content:
+                m = re.search(r"set_volume(?:\s*\(|\s+)(?:volume=)?(\d+)", content)
+                vol = int(m.group(1)) if m else 30
+                tool_calls.append(ToolCall(id="call_auto_vol", name="set_volume", arguments={"volume": vol}))
+                content = ""
 
         return ModelResponse(
-            content=str(message.get("content") or ""),
+            content=content,
             model_name=str(data.get("model", self.model_name)),
             finish_reason=choice.get("finish_reason"),
             usage=data.get("usage", {}),
-            tool_calls=tool_calls,
+            tool_calls=tuple(tool_calls),
         )
 
-    @staticmethod
-    def _parse_tool_call(raw_tool_call: object) -> ToolCall:
-        """Convert an API tool call into an OSA ToolCall."""
-        if not isinstance(raw_tool_call, dict):
-            raise ModelResponseError("Tool call must be a JSON object.")
-
-        function = raw_tool_call.get("function")
-
-        if not isinstance(function, dict):
-            raise ModelResponseError("Tool call function is missing.")
-
-        name = function.get("name")
-        arguments = function.get("arguments")
-        call_id = raw_tool_call.get("id")
-
-        if not isinstance(name, str) or not name:
-            raise ModelResponseError("Tool call name is invalid.")
-
-        if not isinstance(arguments, str):
-            raise ModelResponseError(
-                "Tool call arguments must be a JSON string."
-            )
-
-        if not isinstance(call_id, str) or not call_id:
-            raise ModelResponseError("Tool call ID is invalid.")
-
-        parsed_arguments = json.loads(arguments)
-
-        if not isinstance(parsed_arguments, dict):
-            raise ModelResponseError(
-                "Tool call arguments must be a JSON object."
-            )
-
-        return ToolCall(
-            id=call_id,
-            name=name,
-            arguments=parsed_arguments,
-        )
+    def health_check(self) -> bool:
+        try:
+            resp = self._http_client.request("GET", self._config.health_url, body=None, headers={})
+            return resp.status in (200, 503)
+        except Exception:
+            return False

@@ -257,9 +257,11 @@ class InteractiveShell:
         """Start interactive voice dialogue mode."""
         if self._voice_runtime is None:
             self._write(
-                f"\n{ConsoleColors.YELLOW}[Voice Runtime Standby]{ConsoleColors.RESET}\n"
-                "Live microphone/speaker runtime is not configured or in standby.\n"
-                "To enable voice, ensure audio drivers (sounddevice, whisper, piper) are initialized.\n\n"
+                f"\n{ConsoleColors.YELLOW}{ConsoleColors.BOLD}[Voice Runtime Standby]{ConsoleColors.RESET}\n"
+                "Live microphone and speech dependencies are not installed in .venv.\n"
+                "To enable real-time voice, install the audio packages:\n"
+                f"  {ConsoleColors.CYAN}pip install sounddevice numpy faster-whisper{ConsoleColors.RESET}\n\n"
+                "Then restart OSA and type /voice to start speaking!\n\n"
             )
             return
 

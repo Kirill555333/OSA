@@ -34,7 +34,8 @@ def test_voice_command_standby_notice() -> None:
     shell.handle_command("/voice")
     output = out.getvalue()
     assert "[Voice Runtime Standby]" in output
-    assert "Live microphone/speaker runtime is not configured" in output
+    assert "Live microphone and speech dependencies are not installed in .venv" in output
+    assert "pip install sounddevice numpy faster-whisper" in output
 
 
 def test_voice_command_active_run_and_exit() -> None:

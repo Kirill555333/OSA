@@ -1,4 +1,6 @@
 """Public voice API for OSA 0.7.x."""
+from osa.voice.engine import OSAVoiceEngine
+from osa.voice.listener import OSAVoiceListener
 
 from osa.voice.activation import (
     AlwaysActiveVoiceActivationDetector,
@@ -202,4 +204,6 @@ __all__ = [
     "create_voice_runtime",
     "create_voice_runtime_from_backend",
     "load_voice_provider_config",
+    "OSAVoiceEngine",
+    "OSAVoiceListener",
 ]
