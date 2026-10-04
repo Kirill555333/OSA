@@ -24,3 +24,5 @@ data/*.db-wal
 
 models/
 *.gguf
+
+data/screenshots/
