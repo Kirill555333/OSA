@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import signal
 import sys
@@ -22,6 +23,7 @@ from osa.models import (
     LlamaCppModel,
 )
 from osa.permissions import (
+    ConfirmationHandler,
     PermissionLevel,
     PermissionPolicy,
 )
@@ -37,11 +39,14 @@ from osa.tools import (
     CloseApplicationTool,
     FileExistsTool,
     FindFilesTool,
+    FocusWindowTool,
     ForgetTool,
     HotkeyTool,
     InspectScreenTool,
     LaunchApplicationTool,
+    ListApplicationsTool,
     ListDirectoryTool,
+    ListWindowsTool,
     OpenUrlTool,
     PatchFileTool,
     PressKeyTool,
@@ -84,7 +89,10 @@ def check_llama_server(url: str = LLAMA_SERVER_URL) -> bool:
         return False
 
 
-def create_agent(memory_storage: LongTermMemory | None = None) -> Agent:
+def create_agent(
+    memory_storage: LongTermMemory | None = None,
+    confirmation_handler: ConfirmationHandler | None = None,
+) -> Agent:
     """Build and configure the main OSA agent with complete native Tool Calling."""
     model = LlamaCppModel(
         LlamaCppConfig(
@@ -110,6 +118,9 @@ def create_agent(memory_storage: LongTermMemory | None = None) -> Agent:
     tool_registry.register(InspectScreenTool())
     tool_registry.register(LaunchApplicationTool())
     tool_registry.register(CloseApplicationTool())
+    tool_registry.register(ListApplicationsTool())
+    tool_registry.register(ListWindowsTool())
+    tool_registry.register(FocusWindowTool())
     tool_registry.register(TakeScreenshotTool())
     tool_registry.register(ClickMouseTool())
     tool_registry.register(ScrollMouseTool())
@@ -156,7 +167,10 @@ def create_agent(memory_storage: LongTermMemory | None = None) -> Agent:
             "calculator": PermissionLevel.ALLOW,
             "system_info": PermissionLevel.ALLOW,
             "launch_application": PermissionLevel.ALLOW,
-            "close_application": PermissionLevel.ALLOW,
+            "close_application": PermissionLevel.CONFIRM,
+            "list_applications": PermissionLevel.ALLOW,
+            "list_windows": PermissionLevel.ALLOW,
+            "focus_window": PermissionLevel.ALLOW,
             "inspect_screen": PermissionLevel.ALLOW,
             "take_screenshot": PermissionLevel.ALLOW,
             "click_mouse": PermissionLevel.ALLOW,
@@ -181,35 +195,31 @@ def create_agent(memory_storage: LongTermMemory | None = None) -> Agent:
         }
     )
 
-    confirmation_handler = create_interactive_confirmation_handler()
+    if confirmation_handler is None:
+        confirmation_handler = create_interactive_confirmation_handler()
 
     logs_dir = workspace_dir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
     event_logger = EventLogger(logs_dir / "osa-events.jsonl")
 
     system_prompt = (
-        "/no_think\n"
-        "Ты — OSA (Оса, Джарвис), персональный автономный AI-ассистент с полным контролем над компьютером.\n"
-        "Всегда отвечай кратко, емко и вежливо на русском языке.\n\n"
-        "ПРАВИЛА ДЕЙСТВИЙ (TOOL CALLING):\n"
-        "1. Для выполнения ЛЮБОГО действия на компьютере ты ОБЯЗАН вызвать соответствующий инструмент.\n"
-        "2. Поиск на YouTube или просмотр видео (например: 'хочу посмотреть Куплинова', 'включи видео X'):\n"
-        "   вызови `open_url` с ссылкой: https://www.youtube.com/results?search_query=<запрос>\n"
-        "3. Поиск в интернете / Google (например: 'найди в гугле X', 'погода в Москве'):\n"
-        "   вызови `open_url` с ссылкой: https://www.google.com/search?q=<запрос>\n"
-        "4. Открытие сайтов (например: 'зайди на гитхаб', 'открой авито / реддит / вк'):\n"
-        "   вызови `open_url` с адресом сайта (https://github.com, https://avito.ru и т.д.).\n"
-        "5. Открытие программ: вызови `launch_application(application_name='...')`.\n"
-        "6. Закрытие программ: вызови `close_application(application_name='...')`.\n"
-        "7. Печать текста или чисел: вызови `type_text(text='...')`.\n"
-        "8. Нажатие клавиш (Enter, Escape, Space): вызови `press_key(key='...')`.\n"
-        "9. Нажатие сочетаний клавиш (Cmd+K, Cmd+A, Cmd+C): вызови `hotkey(keys=['command', 'k'])`.\n"
-        "10. Громкость: вызови `set_volume(volume=число)`.\n"
-        "11. Запоминание фактов: вызови `remember(fact='...')`.\n"
-        "12. Воспоминание фактов: вызови `recall(query='...')`.\n"
-        "13. Анализ экрана: если пользователь спрашивает, что на экране, или просит найти что-то глазами, "
-        "вызови инструмент `inspect_screen(query='...')`.\n"
-        "НИКОГДА не заявляй, что выполнил действие, пока не вызвал инструмент!"
+        "Ты — OSA (Оса), персональный ассистент с доступом к компьютеру пользователя. "
+        "Отвечай кратко, вежливо и по-русски.\n\n"
+        "Правила:\n"
+        "1. Если просьба требует действия на компьютере (открыть или закрыть программу "
+        "или сайт, найти что-то в интернете, переключить окно, напечатать текст, нажать "
+        "клавишу, изменить громкость, посмотреть на экран, запомнить что-то), вызови "
+        "подходящий инструмент через механизм вызова инструментов. Не записывай вызов "
+        "текстом и не описывай, что собираешься сделать.\n"
+        "2. Не сообщай, что действие выполнено, пока инструмент не вернул результат. "
+        "Если инструмент вернул ошибку, честно скажи об этом и предложи вариант.\n"
+        "3. Не уверен в названии программы или окна — сначала вызови list_applications "
+        "или list_windows и выбери из реального списка.\n"
+        "4. Для поиска в интернете или видео вызови open_url с готовой ссылкой поиска "
+        "(например, https://www.youtube.com/results?search_query=... или "
+        "https://www.google.com/search?q=...), подставив запрос пользователя в "
+        "именительном падеже, без выдуманных слов.\n"
+        "5. Если действие не нужно, просто ответь."
     )
 
     return Agent(
@@ -323,11 +333,205 @@ def run_interactive_loop(voice_enabled: bool = True) -> None:
             print(f"\n[Ошибка выполнения: {exc}]\n")
 
 
+def run_listening_loop(listen_mode: str, voice_enabled: bool = True) -> None:
+    """Interactive loop with background voice listening and keyboard input together."""
+    from osa.shell.input_hub import InputHub
+    from osa.shell.session import (
+        OutputSpeaker,
+        create_confirmation_callback,
+        create_debug_sink,
+        debug_settings_from_env,
+        handle_listen_command,
+        listener_problem,
+    )
+    from osa.voice.background import BackgroundListener
+    from osa.voice.background_audio import FasterWhisperTranscriber, SoundDeviceFrameSource
+    from osa.voice.wake import ListenMode, WakeWordGate
+
+    setup_signal_handler()
+
+    workspace_dir = Path.cwd()
+    data_dir = workspace_dir / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    memory_storage = LongTermMemory(data_dir / "osa-memory.db")
+
+    hub = InputHub()
+    agent = create_agent(
+        memory_storage,
+        ConfirmationHandler(callback=create_confirmation_callback(hub)),
+    )
+    voice_engine = OSAVoiceEngine()
+    model_size = os.environ.get("OSA_STT_MODEL", "small")
+
+    print("\n" + "=" * 65)
+    print(f"  OSA AI Assistant (v{VERSION}) — фоновое прослушивание")
+    print(f"  Inference: {LLAMA_SERVER_URL}")
+    print(f"  Микрофон: режим {listen_mode}, Whisper {model_size}")
+    print("  Скажите «Оса, ...» или печатайте текст. Режим: /listen off|wake|always")
+    print("  Подтверждения опасных действий — только с клавиатуры.")
+    print("  Выход: Ctrl+C или напишите 'exit' / 'выход'")
+    print("=" * 65 + "\n")
+
+    print(f"[Загрузка слуха Whisper {model_size}...]", end="\r", flush=True)
+    transcriber = FasterWhisperTranscriber(model_size)
+    transcriber.preload()
+    print(" " * 45, end="\r", flush=True)
+
+    debug_enabled, log_transcripts = debug_settings_from_env(os.environ)
+    debug_sink = None
+
+    if debug_enabled:
+        debug_sink = create_debug_sink(workspace_dir / "logs" / "voice-debug.log")
+
+    listener: BackgroundListener | None = BackgroundListener(
+        SoundDeviceFrameSource(),
+        transcriber,
+        WakeWordGate(mode=ListenMode.parse(listen_mode)),
+        hub.post_voice,
+        debug=debug_sink,
+        log_transcripts=log_transcripts,
+    )
+
+    try:
+        listener.start()
+    except Exception as exc:
+        print(f"[Микрофон недоступен: {exc}. Продолжаю только с клавиатурой.]\n")
+        listener = None
+
+    speaker = OutputSpeaker(voice_engine, listener, hub)
+    hub.start()
+
+    prompt = "User > "
+    problem_reported = False
+
+    try:
+        if voice_enabled:
+            speaker.say("Здравствуйте, сэр. Я готов к работе.")
+
+        print(prompt, end="", flush=True)
+
+        while True:
+            event = hub.next_event(timeout=0.5)
+
+            if event is None:
+                problem = None if problem_reported else listener_problem(listener)
+
+                if problem:
+                    problem_reported = True
+                    print(f"\n[{problem}]\n{prompt}", end="", flush=True)
+
+                continue
+
+            if event.kind == "eof":
+                print("\nOSA session ended. Good bye!")
+                break
+
+            from_voice = event.kind == "voice"
+            user_input = event.text.strip()
+
+            try:
+                if from_voice and event.reason == "wake_only":
+                    print("\n 🎙 Слушаю.")
+
+                    if voice_enabled:
+                        speaker.say("Слушаю.")
+
+                    if listener is not None:
+                        listener.open_follow_up()
+
+                    print(prompt, end="", flush=True)
+                    continue
+
+                if not user_input:
+                    print(prompt, end="", flush=True)
+                    continue
+
+                if from_voice:
+                    print(f"\nВы (голос) > {user_input}\n")
+
+                low = user_input.lower()
+
+                if not from_voice and low.startswith("/listen"):
+                    print(f"OSA > {handle_listen_command(user_input, listener)}\n")
+                    print(prompt, end="", flush=True)
+                    continue
+
+                if any(w in low for w in ("включи голос", "отвечай вслух", "включи звук")):
+                    voice_enabled = True
+                    msg = "Голосовой режим включен, сэр."
+                    print(f"OSA > {msg}\n")
+                    speaker.say(msg)
+                    print(prompt, end="", flush=True)
+                    continue
+
+                if any(w in low for w in ("выключи голос", "без звука", "не говори вслух")):
+                    voice_enabled = False
+                    print("OSA > [Голосовой вывод отключен.]\n")
+                    print(prompt, end="", flush=True)
+                    continue
+
+                exit_words = ("выход", "закройся")
+
+                if not from_voice:
+                    exit_words += ("/exit", "/quit", "exit", "quit", "стоп")
+
+                if low in exit_words:
+                    print("\nOSA stopped. Good bye, sir!")
+
+                    if voice_enabled:
+                        speaker.say("До свидания, сэр.")
+
+                    break
+
+                # Anti-Loop & Context Bounding: prevent KV-cache runaway
+                try:
+                    if len(agent._context.messages()) > 10:
+                        agent.reset()
+                except Exception:
+                    pass
+
+                print("[OSA выполняет...]", flush=True)
+                response = agent.chat(user_input)
+                output_text = getattr(response, "content", "") or ""
+
+                if not output_text and hasattr(response, "reasoning_content"):
+                    output_text = getattr(response, "reasoning_content", "") or ""
+
+                if not output_text:
+                    output_text = "Готово, сэр."
+
+                print(f"OSA > {output_text}\n")
+
+                if voice_enabled:
+                    speaker.say(output_text)
+
+                if from_voice and listener is not None:
+                    listener.open_follow_up()
+            except Exception as exc:
+                print(f"\n[Ошибка выполнения: {exc}]\n")
+
+            print(prompt, end="", flush=True)
+    except (KeyboardInterrupt, EOFError):
+        print("\nOSA session ended. Good bye!")
+    finally:
+        voice_engine.stop()
+
+        if listener is not None:
+            listener.stop()
+
+
 def main() -> None:
     """Main CLI entrypoint."""
     parser = argparse.ArgumentParser(description="OSA — Personal AI Desktop Assistant")
     parser.add_argument("--voice", action="store_true", help="Enable voice output (TTS)")
-    parser.add_argument("--listen", action="store_true", help="Start directly in listening mode")
+    parser.add_argument(
+        "--listen",
+        nargs="?",
+        const="wake",
+        choices=["wake", "always"],
+        default=None,
+        help="Listen to the microphone in the background (wake: say 'Оса, ...'; always: everything)",
+    )
     parser.add_argument("--check", action="store_true", help="Check local llama.cpp server health")
     parser.add_argument("--version", action="store_true", help="Show current version")
 
@@ -345,6 +549,10 @@ def main() -> None:
         else:
             print(f"[✗] llama.cpp server is OFFLINE ({LLAMA_SERVER_URL})")
             sys.exit(1)
+
+    if args.listen:
+        run_listening_loop(args.listen, voice_enabled=True)
+        return
 
     # By default, voice output is enabled
     run_interactive_loop(voice_enabled=True)
