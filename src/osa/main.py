@@ -92,6 +92,7 @@ def check_llama_server(url: str = LLAMA_SERVER_URL) -> bool:
 def create_agent(
     memory_storage: LongTermMemory | None = None,
     confirmation_handler: ConfirmationHandler | None = None,
+    wake_names: Any | None = None,
 ) -> Agent:
     """Build and configure the main OSA agent with complete native Tool Calling."""
     model = LlamaCppModel(
@@ -121,6 +122,12 @@ def create_agent(
     tool_registry.register(ListApplicationsTool())
     tool_registry.register(ListWindowsTool())
     tool_registry.register(FocusWindowTool())
+
+    if wake_names is not None:
+        from osa.tools.wake_name import ClearWakeNameTool, SetWakeNameTool
+
+        tool_registry.register(SetWakeNameTool(wake_names))
+        tool_registry.register(ClearWakeNameTool(wake_names))
     tool_registry.register(TakeScreenshotTool())
     tool_registry.register(ClickMouseTool())
     tool_registry.register(ScrollMouseTool())
@@ -171,6 +178,8 @@ def create_agent(
             "list_applications": PermissionLevel.ALLOW,
             "list_windows": PermissionLevel.ALLOW,
             "focus_window": PermissionLevel.ALLOW,
+            "set_wake_name": PermissionLevel.ALLOW,
+            "clear_wake_name": PermissionLevel.ALLOW,
             "inspect_screen": PermissionLevel.ALLOW,
             "take_screenshot": PermissionLevel.ALLOW,
             "click_mouse": PermissionLevel.ALLOW,
@@ -341,11 +350,16 @@ def run_listening_loop(listen_mode: str, voice_enabled: bool = True) -> None:
         create_confirmation_callback,
         create_debug_sink,
         debug_settings_from_env,
+        describe_names,
+        format_heard,
         handle_listen_command,
+        handle_name_command,
         listener_problem,
+        wake_config_from_env,
     )
     from osa.voice.background import BackgroundListener
     from osa.voice.background_audio import FasterWhisperTranscriber, SoundDeviceFrameSource
+    from osa.voice.names import WakeNameService
     from osa.voice.wake import ListenMode, WakeWordGate
 
     setup_signal_handler()
@@ -356,9 +370,11 @@ def run_listening_loop(listen_mode: str, voice_enabled: bool = True) -> None:
     memory_storage = LongTermMemory(data_dir / "osa-memory.db")
 
     hub = InputHub()
+    wake_names = WakeNameService(data_dir / "osa-settings.json")
     agent = create_agent(
         memory_storage,
         ConfirmationHandler(callback=create_confirmation_callback(hub)),
+        wake_names=wake_names,
     )
     voice_engine = OSAVoiceEngine()
     model_size = os.environ.get("OSA_STT_MODEL", "small")
@@ -367,7 +383,8 @@ def run_listening_loop(listen_mode: str, voice_enabled: bool = True) -> None:
     print(f"  OSA AI Assistant (v{VERSION}) — фоновое прослушивание")
     print(f"  Inference: {LLAMA_SERVER_URL}")
     print(f"  Микрофон: режим {listen_mode}, Whisper {model_size}")
-    print("  Скажите «Оса, ...» или печатайте текст. Режим: /listen off|wake|always")
+    print(f"  {describe_names(wake_names)}")
+    print("  Скажите «Оса, ...» или печатайте текст. Команды: /listen, /name, /heard")
     print("  Подтверждения опасных действий — только с клавиатуры.")
     print("  Выход: Ctrl+C или напишите 'exit' / 'выход'")
     print("=" * 65 + "\n")
@@ -383,10 +400,15 @@ def run_listening_loop(listen_mode: str, voice_enabled: bool = True) -> None:
     if debug_enabled:
         debug_sink = create_debug_sink(workspace_dir / "logs" / "voice-debug.log")
 
+    gate = WakeWordGate(
+        wake_config_from_env(os.environ),
+        mode=ListenMode.parse(listen_mode),
+        extra_names=wake_names.alias_names(),
+    )
     listener: BackgroundListener | None = BackgroundListener(
         SoundDeviceFrameSource(),
         transcriber,
-        WakeWordGate(mode=ListenMode.parse(listen_mode)),
+        gate,
         hub.post_voice,
         debug=debug_sink,
         log_transcripts=log_transcripts,
@@ -397,6 +419,9 @@ def run_listening_loop(listen_mode: str, voice_enabled: bool = True) -> None:
     except Exception as exc:
         print(f"[Микрофон недоступен: {exc}. Продолжаю только с клавиатурой.]\n")
         listener = None
+
+    if listener is not None:
+        wake_names.subscribe(listener.set_wake_names)
 
     speaker = OutputSpeaker(voice_engine, listener, hub)
     hub.start()
@@ -453,6 +478,16 @@ def run_listening_loop(listen_mode: str, voice_enabled: bool = True) -> None:
 
                 if not from_voice and low.startswith("/listen"):
                     print(f"OSA > {handle_listen_command(user_input, listener)}\n")
+                    print(prompt, end="", flush=True)
+                    continue
+
+                if not from_voice and low.startswith("/name"):
+                    print(f"OSA > {handle_name_command(user_input, wake_names)}\n")
+                    print(prompt, end="", flush=True)
+                    continue
+
+                if not from_voice and low.startswith("/heard"):
+                    print(f"OSA > {format_heard(listener)}\n")
                     print(prompt, end="", flush=True)
                     continue
 

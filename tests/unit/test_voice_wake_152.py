@@ -1,4 +1,4 @@
-"""Tests for wake-word gating (OSA 1.5.2.1)."""
+"""Tests for wake-word gating (OSA 1.5.2.1, extra names in 1.5.2.4)."""
 
 from __future__ import annotations
 
@@ -15,11 +15,15 @@ class _Clock:
         return self.now
 
 
-def _gate(mode: ListenMode = ListenMode.WAKE, clock: _Clock | None = None) -> WakeWordGate:
-    return WakeWordGate(mode=mode, clock=clock or _Clock())
+def _gate(
+    mode: ListenMode = ListenMode.WAKE,
+    clock: _Clock | None = None,
+    extra_names: tuple[str, ...] = (),
+) -> WakeWordGate:
+    return WakeWordGate(mode=mode, clock=clock or _Clock(), extra_names=extra_names)
 
 
-# --- wake mode ---------------------------------------------------------------------
+# --- built-in name -----------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -28,11 +32,13 @@ def _gate(mode: ListenMode = ListenMode.WAKE, clock: _Clock | None = None) -> Wa
         ("Оса, открой хром", "открой хром"),
         ("оса открой хром", "открой хром"),
         ("Осы, открой хром.", "открой хром"),
+        ("Ося, открой хром", "открой хром"),
         ("Эй, Оса, открой хром", "открой хром"),
+        ("Эй, слушай, Оса, открой хром", "открой хром"),
         ("ОСА! Закрой калькулятор", "Закрой калькулятор"),
         ("Osa open the calculator", "open the calculator"),
         ("Оса — покажи окна", "покажи окна"),
-        ("Оса́, открой хром", "открой хром"),
+        ("Оса\u0301, открой хром", "открой хром"),
     ],
 )
 def test_wake_word_is_recognized_and_stripped(spoken: str, expected: str) -> None:
@@ -55,9 +61,27 @@ def test_wake_word_beyond_leading_words_is_ignored() -> None:
 
 def test_similar_but_different_words_do_not_wake() -> None:
     gate = _gate()
+    stressed = "оса\u0301дить крепость"
 
-    for spoken in ("ось в телеге", "ос много летом", "оса́дить крепость", "осень пришла"):
+    for spoken in ("ось в телеге", "ос много летом", stressed, "осень пришла"):
         assert gate.process(spoken).accepted is False, spoken
+
+
+def test_builtin_name_at_the_end_of_a_phrase_does_not_wake_by_default() -> None:
+    gate = _gate()
+
+    for spoken in ("Открой хром, Оса", "Это была оса", "Я видел осу"):
+        assert gate.process(spoken).accepted is False, spoken
+
+
+def test_builtin_name_at_the_end_can_be_enabled_in_config() -> None:
+    gate = WakeWordGate(WakeConfig(trailing_names=("оса",)), clock=_Clock())
+
+    assert gate.process("Открой хром, Оса") == GateResult(True, "Открой хром", "wake")
+
+    gate.close_follow_up()
+
+    assert gate.process("Я видел осу").accepted is False
 
 
 def test_wake_word_alone_opens_follow_up_window() -> None:
@@ -71,9 +95,22 @@ def test_wake_word_alone_opens_follow_up_window() -> None:
     assert gate.process("открой хром") == GateResult(True, "открой хром", "follow_up")
 
 
-def test_follow_up_window_expires() -> None:
+def test_follow_up_window_defaults_to_twenty_seconds() -> None:
     clock = _Clock()
     gate = _gate(clock=clock)
+    gate.process("Оса, привет")
+
+    clock.now += 19.0
+    assert gate.process("а теперь калькулятор").accepted is True
+
+    gate.open_follow_up()
+    clock.now += 21.0
+    assert gate.process("а теперь калькулятор").accepted is False
+
+
+def test_follow_up_window_expires() -> None:
+    clock = _Clock()
+    gate = WakeWordGate(WakeConfig(follow_up_seconds=10.0), clock=clock)
     gate.process("Оса, привет")
 
     clock.now += 9.0
@@ -97,6 +134,69 @@ def test_close_follow_up_requires_wake_word_again() -> None:
     gate.close_follow_up()
 
     assert gate.process("открой хром").accepted is False
+
+
+# --- extra (user) names ------------------------------------------------------------
+
+
+def test_extra_name_wakes_and_builtin_name_keeps_working() -> None:
+    gate = _gate(extra_names=("джарвис",))
+
+    assert gate.process("Джарвис, открой хром") == GateResult(True, "открой хром", "wake")
+    assert gate.process("Оса, открой хром") == GateResult(True, "открой хром", "wake")
+
+
+def test_extra_name_tolerates_recognition_errors() -> None:
+    gate = _gate(extra_names=("джарвис",))
+
+    assert gate.process("Джарвиз, открой хром").command == "открой хром"
+
+
+def test_extra_name_works_at_the_end_of_a_phrase() -> None:
+    gate = _gate(extra_names=("джарвис",))
+
+    assert gate.process("Открой хром, Джарвис.") == GateResult(True, "Открой хром", "wake")
+    assert gate.process("Слушай мне нужен хром, Джарвис") == GateResult(
+        True,
+        "Слушай мне нужен хром",
+        "wake",
+    )
+
+
+def test_extra_name_alone_is_wake_only() -> None:
+    gate = _gate(extra_names=("джарвис",))
+
+    assert gate.process("Джарвис") == GateResult(True, "", "wake_only")
+
+
+def test_extra_names_can_be_replaced_and_cleared_at_runtime() -> None:
+    gate = _gate(extra_names=("джарвис",))
+
+    gate.set_extra_names(["пятница"])
+
+    assert gate.extra_names == ("пятница",)
+    assert gate.process("Пятница, привет").accepted is True
+
+    gate.close_follow_up()
+
+    assert gate.process("Джарвис, привет").accepted is False
+
+    gate.set_extra_names([])
+
+    assert gate.extra_names == ()
+    assert gate.process("Пятница, привет").accepted is False
+    assert gate.process("Оса, привет").accepted is True
+
+
+def test_extra_names_are_normalized_and_deduplicated() -> None:
+    gate = _gate(extra_names=("Джарвис", " джарвис ", ""))
+
+    assert gate.extra_names == ("джарвис",)
+
+
+def test_display_names_list_builtin_first() -> None:
+    assert _gate().display_names() == ("Оса",)
+    assert _gate(extra_names=("джарвис",)).display_names() == ("Оса", "Джарвис")
 
 
 # --- other modes -------------------------------------------------------------------
@@ -134,7 +234,7 @@ def test_changing_mode_clears_follow_up() -> None:
 # --- configuration -----------------------------------------------------------------
 
 
-def test_custom_name_with_fuzzy_match() -> None:
+def test_custom_builtin_name_with_fuzzy_match() -> None:
     gate = WakeWordGate(WakeConfig(names=("джарвис",)), clock=_Clock())
 
     assert gate.process("Привет, как дела").accepted is False
@@ -162,6 +262,7 @@ def test_listen_mode_parse() -> None:
     [
         {"names": ()},
         {"names": ("  ",)},
+        {"trailing_names": ("",)},
         {"max_leading_words": 0},
         {"min_similarity": 0},
         {"follow_up_seconds": -1},

@@ -12,7 +12,8 @@ is enabled explicitly.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections import deque
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 import threading
@@ -103,6 +104,7 @@ class BackgroundListener:
         self._thread: threading.Thread | None = None
         self._error: Exception | None = None
         self._last_activity = self._clock()
+        self._recent: deque[tuple[str, str]] = deque(maxlen=12)
 
     # --- state ---------------------------------------------------------------------
 
@@ -176,6 +178,27 @@ class BackgroundListener:
         """Let the next utterances through without the wake word for a short window."""
         with self._lock:
             self._gate.open_follow_up()
+
+    def set_wake_names(self, names: Iterable[str]) -> None:
+        """Replace the user's extra wake names; the built-in name keeps working."""
+        with self._lock:
+            self._gate.set_extra_names(names)
+            display = self._gate.display_names()
+
+        update = getattr(self._transcriber, "update_names", None)
+
+        if callable(update):
+            try:
+                update(display)
+            except Exception as exc:
+                self._log(f"transcriber name update failed: {exc!r}")
+
+        self._log("wake names updated")
+
+    def recent_heard(self) -> list[tuple[str, str]]:
+        """Return the last recognized phrases with the gate decision (memory only)."""
+        with self._lock:
+            return list(self._recent)
 
     def start(self) -> None:
         """Open the audio stream once and start the worker thread."""
@@ -255,6 +278,7 @@ class BackgroundListener:
 
         with self._lock:
             result = self._gate.process(heard)
+            self._recent.append((heard, result.reason))
 
         if not result.accepted:
             self._log(f"ignored ({result.reason})")

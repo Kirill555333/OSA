@@ -8,7 +8,7 @@ imported lazily, so importing this module is cheap and safe without them.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 import queue
 import threading
 from typing import Any
@@ -157,6 +157,13 @@ class FasterWhisperTranscriber:
     @property
     def model_size(self) -> str:
         return self._model_size
+
+    def update_names(self, names: Iterable[str]) -> None:
+        """Bias recognition towards the assistant's names (used as the prompt)."""
+        unique = [name for name in dict.fromkeys(names) if name]
+
+        if unique:
+            self._initial_prompt = "Разговор с ассистентом по имени " + " или ".join(unique) + "."
 
     def preload(self) -> None:
         """Load the model now so the first utterance is not delayed."""

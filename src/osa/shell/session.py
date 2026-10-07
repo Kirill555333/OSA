@@ -8,12 +8,14 @@ reporting and keyboard-only confirmation of dangerous actions.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from pathlib import Path
 import sys
 import time
 from typing import Any
 
-from osa.voice.wake import ListenMode
+from osa.voice.names import BASE_DISPLAY_NAME
+from osa.voice.wake import ListenMode, WakeConfig
 
 _YES = frozenset({"y", "yes", "д", "да"})
 
@@ -184,3 +186,91 @@ def create_confirmation_callback(
         return answer is not None and answer.strip().lower() in _YES
 
     return callback
+
+
+_REASON_LABELS = {
+    "wake": "обращение",
+    "wake_only": "только имя",
+    "follow_up": "продолжение разговора",
+    "always": "режим «всё»",
+    "no_wake": "без обращения",
+    "empty": "пусто",
+    "off": "прослушивание выключено",
+}
+_CLEAR_WORDS = frozenset({"clear", "сброс", "убрать", "удалить"})
+
+
+def describe_names(service: Any | None) -> str:
+    """Say which names the assistant answers to."""
+    name = service.custom_name if service is not None else None
+
+    if name:
+        return f"Откликаюсь на «{BASE_DISPLAY_NAME}» и «{name.capitalize()}»."
+
+    return f"Откликаюсь на «{BASE_DISPLAY_NAME}»."
+
+
+def handle_name_command(line: str, service: Any | None) -> str:
+    """Handle ``/name``, ``/name <имя>`` and ``/name clear``; return the reply text."""
+    if service is None:
+        return "Смена имени недоступна в этом режиме."
+
+    parts = line.split(maxsplit=1)
+
+    if len(parts) < 2:
+        return f"{describe_names(service)} Сменить: /name <имя>, убрать: /name clear"
+
+    argument = parts[1].strip()
+
+    if argument.lower() in _CLEAR_WORDS:
+        if service.clear_custom_name():
+            return f"Дополнительное имя удалено. Откликаюсь на «{BASE_DISPLAY_NAME}»."
+
+        return "Дополнительного имени и не было."
+
+    try:
+        change = service.set_custom_name(argument)
+    except ValueError as exc:
+        return str(exc)
+
+    note = "" if change.persisted else " (не удалось сохранить в файл, действует до перезапуска)"
+    shown = change.name.capitalize()
+
+    return f"Теперь откликаюсь на «{shown}» и всегда на «{BASE_DISPLAY_NAME}».{note}"
+
+
+def format_heard(listener: Any | None) -> str:
+    """Show the last recognized phrases and what the wake-word gate did with them."""
+    if listener is None:
+        return "Прослушивание не запущено."
+
+    items = listener.recent_heard()
+
+    if not items:
+        return "Пока ничего не услышано."
+
+    lines = [
+        f"  {number}. «{text or '…'}» — {_REASON_LABELS.get(reason, reason)}"
+        for number, (text, reason) in enumerate(items, 1)
+    ]
+
+    return "Последние фразы (хранятся только в памяти, на диск не пишутся):\n" + "\n".join(lines)
+
+
+def wake_config_from_env(env: Mapping[str, str], base: WakeConfig | None = None) -> WakeConfig:
+    """Apply OSA_FOLLOW_UP_SECONDS (0-300) to the wake configuration."""
+    config = base or WakeConfig()
+    raw = str(env.get("OSA_FOLLOW_UP_SECONDS", "")).strip()
+
+    if not raw:
+        return config
+
+    try:
+        seconds = float(raw)
+    except ValueError:
+        return config
+
+    if not 0 <= seconds <= 300:
+        return config
+
+    return replace(config, follow_up_seconds=seconds)
