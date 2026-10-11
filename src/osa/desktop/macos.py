@@ -415,6 +415,20 @@ class MacOSDesktopAutomation(DesktopAutomationInterface):
         except Exception as exc:
             raise DesktopAutomationActionError(f"Failed to execute hotkey: {exc}") from exc
 
+    def foreground_application(self) -> str | None:
+        """Return the name of the frontmost application, or None when unknown."""
+        script = (
+            'tell application "System Events" to get name of '
+            "first application process whose frontmost is true"
+        )
+
+        try:
+            name = self._run_osascript(script).strip()
+        except Exception:
+            return None
+
+        return name or None
+
     def screenshot(self) -> bytes:
         """Capture screen using macOS /usr/sbin/screencapture."""
         self._require_macos()

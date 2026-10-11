@@ -149,7 +149,7 @@ class HotkeyTool(ToolInterface):
         try:
             str_keys = [str(k) for k in keys]
             print(f" [⚡ Хоткей: {'+'.join(str_keys)}]", flush=True)
-            self._automation.hotkey(str_keys)
+            self._automation.hotkey(*str_keys)
             return ToolResult(success=True, output=f"Pressed hotkey {'+'.join(str_keys)}.")
         except Exception as exc:
             return ToolResult(success=False, error=f"Failed to press hotkey: {exc}")
@@ -264,7 +264,10 @@ class TakeScreenshotTool(ToolInterface):
             screenshots_dir = Path.cwd() / "data" / "screenshots"
             screenshots_dir.mkdir(parents=True, exist_ok=True)
 
-            fname = str(arguments.get("filename", "")).strip() or "latest.png"
+            requested = str(arguments.get("filename", "")).strip()
+            fname = Path(requested.replace("\\", "/")).name.strip()
+            if fname in ("", ".", ".."):
+                fname = "latest.png"
             if not fname.endswith(".png"):
                 fname += ".png"
 
@@ -357,14 +360,19 @@ class ScrollMouseTool(ToolInterface):
                 cg.CFRelease.argtypes = [ctypes.c_void_p]
 
                 event = cg.CGEventCreateScrollWheelEvent(None, 0, 1, -int(delta))
-                if event:
-                    cg.CGEventPost(0, event)
-                    cg.CFRelease(event)
+                if not event:
+                    return ToolResult(
+                        success=False,
+                        error="Не удалось создать событие прокрутки.",
+                    )
+                cg.CGEventPost(0, event)
+                cg.CFRelease(event)
                 return ToolResult(success=True, output=f"Scrolled {delta} units.")
-            elif sys.platform == "win32":
-                return ToolResult(success=True, output=f"Scrolled {delta} units on Windows.")
-            else:
-                return ToolResult(success=True, output=f"Scrolled {delta} units.")
+
+            return ToolResult(
+                success=False,
+                error="Прокрутка пока не поддерживается на этой платформе.",
+            )
         except Exception as exc:
             return ToolResult(success=False, error=f"Failed to scroll: {exc}")
 
@@ -406,9 +414,12 @@ class SetSystemVolumeTool(ToolInterface):
                 subprocess.run(["osascript", "-e", script], check=True)
                 return ToolResult(success=True, output=f"Громкость установлена на {val}%.")
             elif sys.platform == "win32":
-                return ToolResult(success=True, output=f"Громкость установлена на {val}%.")
+                return ToolResult(
+                    success=False,
+                    error="Изменение громкости пока не поддерживается на Windows.",
+                )
             else:
-                subprocess.run(["amixer", "-D", "pulse", "sset", "Master", f"{val}%"])
+                subprocess.run(["amixer", "-D", "pulse", "sset", "Master", f"{val}%"], check=True)
                 return ToolResult(success=True, output=f"Громкость установлена на {val}%.")
         except Exception as exc:
             return ToolResult(success=False, error=f"Failed to set volume: {exc}")

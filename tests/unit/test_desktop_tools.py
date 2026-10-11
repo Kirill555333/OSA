@@ -59,7 +59,7 @@ def test_hotkey_tool() -> None:
 
     result = tool.execute({"keys": ["command", "f"]})
     assert result.success
-    fake_auto.hotkey.assert_called_with(["command", "f"])
+    fake_auto.hotkey.assert_called_with("command", "f")
 
 
 def test_desktop_registry_full() -> None:

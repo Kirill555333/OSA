@@ -10,6 +10,7 @@ import sys
 import urllib.request
 from typing import Any
 
+from osa.actions.desktop_tool_safety import DesktopToolSafetyPolicy, ForegroundProbe
 from osa.browser import HttpBrowser
 from osa.core import Agent
 from osa.memory import (
@@ -231,6 +232,14 @@ def create_agent(
         "5. Если действие не нужно, просто ответь."
     )
 
+    # Desktop input tools go through the desktop safety rules: confirmation for
+    # protected applications, destructive hotkeys and blocked combinations.
+    # close_application is already confirmed by the permission policy.
+    action_safety_policy = DesktopToolSafetyPolicy(
+        foreground=ForegroundProbe(),
+        skip_tools=frozenset({"close_application"}),
+    )
+
     return Agent(
         model=model,
         system_prompt=system_prompt,
@@ -244,6 +253,7 @@ def create_agent(
         confirmation_handler=confirmation_handler,
         recovery=ErrorRecovery(),
         memory_integration=memory_integration,
+        action_safety_policy=action_safety_policy,
     )
 
 

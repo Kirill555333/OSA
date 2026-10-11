@@ -104,6 +104,7 @@ class Agent:
         recovery_integration: AgentRecoveryIntegration | None = None,
         context_manager: ContextManager | None = None,
         context_budget: ContextBudget | None = None,
+        action_safety_policy: object | None = None,
     ) -> None:
         if not 0.0 <= temperature <= 2.0:
             raise ValueError(
@@ -181,6 +182,7 @@ class Agent:
                 self._permission_policy,
                 logger=self._log,
             ),
+            safety_policy=action_safety_policy,
             confirmation_handler=LegacyConfirmationActionHandler(
                 self._confirmation_handler
             ),
