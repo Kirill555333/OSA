@@ -575,7 +575,12 @@ def main() -> None:
         const="wake",
         choices=["wake", "always"],
         default=None,
-        help="Listen to the microphone in the background (wake: say 'Оса, ...'; always: everything)",
+        help="Background microphone mode (default: wake, say 'Оса, ...'; always: everything)",
+    )
+    parser.add_argument(
+        "--push-to-talk",
+        action="store_true",
+        help="Legacy mode: press Enter to record a phrase instead of background listening",
     )
     parser.add_argument("--check", action="store_true", help="Check local llama.cpp server health")
     parser.add_argument("--version", action="store_true", help="Show current version")
@@ -595,11 +600,12 @@ def main() -> None:
             print(f"[✗] llama.cpp server is OFFLINE ({LLAMA_SERVER_URL})")
             sys.exit(1)
 
-    if args.listen:
-        run_listening_loop(args.listen, voice_enabled=True)
+    if not args.push_to_talk:
+        # Default: background listening (say 'Оса, ...' or type); see --listen
+        run_listening_loop(args.listen or "wake", voice_enabled=True)
         return
 
-    # By default, voice output is enabled
+    # Legacy mode: type text or press Enter to record a phrase
     run_interactive_loop(voice_enabled=True)
 
 
