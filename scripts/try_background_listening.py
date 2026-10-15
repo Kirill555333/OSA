@@ -24,6 +24,7 @@ def main() -> int:
     parser.add_argument("--mode", default="wake", choices=["wake", "always"])
     parser.add_argument("--model", default="small", help="Whisper size: tiny, base, small, medium")
     parser.add_argument("--debug", action="store_true", help="Print what the listener is doing")
+    parser.add_argument("--show-text", action="store_true", help="Also print recognized text")
     parser.add_argument("--device", default=None, help="Input device index or name")
     args = parser.parse_args()
 
@@ -42,7 +43,8 @@ def main() -> int:
         transcriber,
         gate,
         pending.append,
-        debug=debug if args.debug else None,
+        debug=debug if (args.debug or args.show_text) else None,
+        log_transcripts=args.show_text,
     )
 
     try:
