@@ -8,6 +8,7 @@ from osa.core.modes import (
 from osa.core.agent import (
     Agent,
     AgentError,
+    AgentMaxRoundsError,
     PermissionDeniedError,
 )
 from osa.core.agent_voice_action import (
@@ -26,6 +27,7 @@ __all__ = [
     "AgentModeProfile",
     "Agent",
     "AgentError",
+    "AgentMaxRoundsError",
     "ConversationContext",
     "PermissionDeniedError",
     "AgentVoiceActionAdapter",

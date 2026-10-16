@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 import signal
 import sys
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 from osa.actions.desktop_tool_safety import DesktopToolSafetyPolicy, ForegroundProbe
@@ -246,7 +246,6 @@ def create_agent(
         temperature=0.1,
         automatic_memory=automatic_memory,
         max_tokens=512,
-        max_tool_rounds=5,
         tool_registry=tool_registry,
         event_logger=event_logger,
         permission_policy=permission_policy,
@@ -329,7 +328,7 @@ def run_interactive_loop(voice_enabled: bool = True) -> None:
             except Exception:
                 pass
 
-            # Прямой вызов агента: модель САМА решает вызвать inspect_screen, open_url или launch_app!
+            # Прямой вызов агента: модель САМА выбирает инструмент.
             print("[OSA выполняет...]", flush=True)
             response = agent.chat(user_input)
             output_text = getattr(response, "content", "") or ""

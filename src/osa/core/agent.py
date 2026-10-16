@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 import time
+from collections.abc import Iterator
 from typing import Any, Mapping
 
 from osa.actions.contracts import (
@@ -14,16 +14,13 @@ from osa.actions.contracts import (
 from osa.actions.pipeline import ActionSafetyPipeline
 from osa.actions.router import ActionRouter
 from osa.actions.tool import ToolRegistryActionAdapter
+from osa.context import ContextBudget, ContextManager
 from osa.core.agent_action_policy import (
     AgentModeActionPolicy,
     LegacyConfirmationActionHandler,
     LegacyPermissionActionPolicy,
 )
 from osa.core.agent_observability import AgentObservability
-from osa.core.execution_context import (
-    ExecutionContext,
-    ExecutionContextError,
-)
 from osa.core.agent_recovery import (
     AgentRecoveryIntegration,
     AgentRecoveryIntegrationError,
@@ -36,26 +33,19 @@ from osa.core.agent_runtime import (
 from osa.core.agent_stream import AgentStreamAccumulator
 from osa.core.agent_tool_round import AgentToolRound, AgentToolRoundError
 from osa.core.context import ConversationContext
-from osa.context import ContextBudget, ContextManager
+from osa.core.execution_context import (
+    ExecutionContext,
+    ExecutionContextError,
+)
 from osa.core.modes import (
     AgentMode,
     AgentModePolicy,
 )
+from osa.memory.automatic import AutomaticMemory
 from osa.memory.integration import (
     MemoryIntegration,
     MemoryIntegrationResult,
 )
-from osa.tasks.autonomous import (
-    AutonomousLoop,
-    AutonomousRunReport,
-)
-from osa.recovery import ErrorRecovery, RecoveryConfig
-from osa.memory.automatic import AutomaticMemory
-from osa.recovery_contracts import (
-    RecoveryFailureKind,
-    RecoveryResult,
-)
-
 from osa.models import (
     ChatMessage,
     ModelError,
@@ -63,10 +53,20 @@ from osa.models import (
     ModelRequest,
     ModelResponse,
     ToolCall,
+    ToolDefinition,
 )
 from osa.permissions import (
     ConfirmationHandler,
     PermissionPolicy,
+)
+from osa.recovery import ErrorRecovery, RecoveryConfig
+from osa.recovery_contracts import (
+    RecoveryFailureKind,
+    RecoveryResult,
+)
+from osa.tasks.autonomous import (
+    AutonomousLoop,
+    AutonomousRunReport,
 )
 from osa.tools import ToolRegistry, ToolResult
 from osa.utils import EventLogger
@@ -74,6 +74,14 @@ from osa.utils import EventLogger
 
 class AgentError(RuntimeError):
     """Base exception raised by the OSA agent."""
+
+
+class AgentMaxRoundsError(AgentError):
+    """Raised when the model/tool loop hits its configured round limit."""
+
+    def __init__(self, rounds: int) -> None:
+        super().__init__(f"Maximum tool rounds exceeded ({rounds}).")
+        self.rounds = rounds
 
 
 class PermissionDeniedError(AgentError):
@@ -323,6 +331,19 @@ class Agent:
 
             return response
 
+        except AgentMaxRoundsError as exc:
+            self._log(
+                "agent.chat.max_rounds_exceeded",
+                duration_ms=self._duration_ms(started_at),
+                rounds=exc.rounds,
+            )
+
+            return ModelResponse(
+                content=self._max_rounds_message(),
+                model_name=self._model.model_name,
+                finish_reason="max_rounds_exceeded",
+            )
+
         except AgentError as exc:
             self._context.restore(previous_context)
 
@@ -494,10 +515,17 @@ class Agent:
                         )
                     )
 
-            raise AgentError(
-                "Maximum tool rounds exceeded "
-                f"({self._max_tool_rounds})."
+            raise AgentMaxRoundsError(self._max_tool_rounds)
+
+        except AgentMaxRoundsError:
+            self._log(
+                "agent.chat_stream.max_rounds_exceeded",
+                duration_ms=self._duration_ms(started_at),
+                rounds=self._max_tool_rounds,
             )
+
+            yield self._max_rounds_message()
+            return
 
         except AgentError:
             self._context.restore(
@@ -1178,10 +1206,7 @@ class Agent:
                     )
                 )
 
-        raise AgentError(
-            "Maximum tool rounds exceeded "
-            f"({self._max_tool_rounds})."
-        )
+        raise AgentMaxRoundsError(self._max_tool_rounds)
 
     def _available_tool_definitions(self):
         """Return tools available in the current agent mode."""
@@ -1221,6 +1246,14 @@ class Agent:
         return (
             "Tool execution failed: "
             f"{result.error or 'Unknown error.'}"
+        )
+
+    def _max_rounds_message(self) -> str:
+        """Return a user-facing message for the max-rounds case."""
+        return (
+            f"Достигнут лимит раундов ({self._max_tool_rounds}). "
+            "Последние действия выполнены, история сохранена. "
+            "Уточните, что делать дальше, или задайте вопрос заново."
         )
 
     def _log(
