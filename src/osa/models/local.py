@@ -8,14 +8,14 @@ merely mentions a tool name never produces a tool call (fail-closed).
 from __future__ import annotations
 
 import base64
-from collections.abc import Iterator
-from dataclasses import dataclass
 import http.client
 import json
-from pathlib import Path
 import re
-from typing import Any
 import urllib.parse
+from collections.abc import Iterator
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from osa.models.interface import (
     ChatMessage,
@@ -43,6 +43,10 @@ class LlamaCppConfig:
     @property
     def health_url(self) -> str:
         return f"{self.base_url.rstrip('/')}/health"
+
+    @property
+    def props_url(self) -> str:
+        return f"{self.base_url.rstrip('/')}/props"
 
 
 class _PersistentHttpClient:
@@ -337,6 +341,37 @@ class LlamaCppModel(ModelInterface):
             usage=data.get("usage", {}),
             tool_calls=tuple(tool_calls),
         )
+
+    def context_size(self) -> int | None:
+        """Return server n_ctx from GET /props, or None if unavailable."""
+        parsed = urllib.parse.urlsplit(self._config.props_url)
+        target = parsed.path or "/props"
+
+        resp = None
+
+        try:
+            resp = self._http_client.request(
+                "GET",
+                target,
+                body=None,
+                headers={"Accept": "application/json"},
+            )
+            body = resp.read().decode("utf-8")
+            data = json.loads(body)
+            settings = data.get("default_generation_settings", {})
+            if not isinstance(settings, dict):
+                return None
+            raw = settings.get("n_ctx")
+            if isinstance(raw, bool):
+                return None
+            if isinstance(raw, int) and raw > 0:
+                return raw
+            return None
+        except Exception:
+            return None
+        finally:
+            if resp is not None:
+                resp.close()
 
     def health_check(self) -> bool:
         try:

@@ -12,6 +12,7 @@ from typing import Any
 
 from osa.actions.desktop_tool_safety import DesktopToolSafetyPolicy, ForegroundProbe
 from osa.browser import HttpBrowser
+from osa.context import ContextBudget
 from osa.core import Agent
 from osa.memory import (
     AutomaticMemory,
@@ -101,6 +102,15 @@ def create_agent(
             base_url=LLAMA_SERVER_URL,
             timeout=45.0,
         )
+    )
+
+    server_n_ctx = model.context_size()
+    if not isinstance(server_n_ctx, int) or server_n_ctx <= 0:
+        server_n_ctx = 8192
+
+    context_budget = ContextBudget.create(
+        total_context_limit=server_n_ctx,
+        reserved_output_tokens=512,
     )
 
     workspace_dir = Path.cwd()
@@ -253,6 +263,7 @@ def create_agent(
         recovery=ErrorRecovery(),
         memory_integration=memory_integration,
         action_safety_policy=action_safety_policy,
+        context_budget=context_budget,
     )
 
 
