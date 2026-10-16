@@ -320,14 +320,6 @@ def run_interactive_loop(voice_enabled: bool = True) -> None:
                     voice_engine.speak("До свидания, сэр.")
                 sys.exit(0)
 
-            # Anti-Loop & Context Bounding: prevent KV-cache runaway
-            try:
-                msg_count = len(agent._context.messages())
-                if msg_count > 10:
-                    agent.reset()
-            except Exception:
-                pass
-
             # Прямой вызов агента: модель САМА выбирает инструмент.
             print("[OSA выполняет...]", flush=True)
             response = agent.chat(user_input)
@@ -526,13 +518,6 @@ def run_listening_loop(listen_mode: str, voice_enabled: bool = True) -> None:
                         speaker.say("До свидания, сэр.")
 
                     break
-
-                # Anti-Loop & Context Bounding: prevent KV-cache runaway
-                try:
-                    if len(agent._context.messages()) > 10:
-                        agent.reset()
-                except Exception:
-                    pass
 
                 print("[OSA выполняет...]", flush=True)
                 response = agent.chat(user_input)
