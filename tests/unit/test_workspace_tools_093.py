@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 import pytest
 
 from osa.tools import (
@@ -54,13 +55,15 @@ def test_safe_shell_cwd_resolution_and_escape_protection(tmp_path: Path) -> None
     sub = tmp_path / "subdir"
     sub.mkdir()
 
+    cmd = "cd" if sys.platform == "win32" else "pwd"
+
     shell = SafeShell(tmp_path)
-    res = shell.execute("pwd", working_directory="subdir")
+    res = shell.execute(cmd, working_directory="subdir")
     assert "subdir" in res.stdout
 
     # Escape attempt
     with pytest.raises(SafeShellError, match="outside workspace root"):
-        shell.execute("pwd", working_directory="../")
+        shell.execute(cmd, working_directory="../")
 
 
 def test_terminal_execute_tool(tmp_path: Path) -> None:

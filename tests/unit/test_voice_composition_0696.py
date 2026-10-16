@@ -242,11 +242,13 @@ def test_invalid_speaker_from_backend_is_rejected():
 
 def test_backend_factory_current_backend_can_build_runtime():
     backend = FakeBackend(
-        platform=AudioPlatform.MACOS,
+        platform=AudioPlatform.current(),
     )
 
     factory = DesktopAudioBackendFactory(
         macos=backend,
+        windows=backend,
+        linux=backend,
         enable_default_provider=False,
     )
 
@@ -265,11 +267,13 @@ def test_backend_factory_current_backend_can_build_runtime():
 
 def test_default_runtime_uses_current_platform_selection():
     backend = FakeBackend(
-        platform=AudioPlatform.MACOS,
+        platform=AudioPlatform.current(),
     )
 
     factory = DesktopAudioBackendFactory(
         macos=backend,
+        windows=backend,
+        linux=backend,
         enable_default_provider=False,
     )
 

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import sys
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from osa.desktop.automation import DesktopPoint
 from osa.tools import (
@@ -28,7 +31,7 @@ def test_take_screenshot_tool() -> None:
 
     result = tool.execute({})
     assert result.success
-    assert "data/screenshots" in result.output
+    assert "data/screenshots" in result.output.replace("\\", "/")
     fake_auto.screenshot.assert_called_once()
 
 
@@ -42,6 +45,7 @@ def test_click_mouse_tool() -> None:
     fake_auto.click_point.assert_called_with(DesktopPoint(x=150, y=250))
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="CoreGraphics scrolling is macOS-only.")
 def test_scroll_mouse_tool() -> None:
     tool = ScrollMouseTool()
     with patch("ctypes.cdll.LoadLibrary") as mock_lib:
@@ -50,6 +54,14 @@ def test_scroll_mouse_tool() -> None:
         mock_lib.return_value = fake_cg
         result = tool.execute({"delta": 3})
         assert result.success
+
+
+@pytest.mark.skipif(sys.platform == "darwin", reason="Non-macOS platforms must refuse honestly.")
+def test_scroll_mouse_honest_refusal_on_non_macos() -> None:
+    tool = ScrollMouseTool()
+    result = tool.execute({"delta": 3})
+    assert result.success is False
+    assert result.error
 
 
 def test_hotkey_tool() -> None:

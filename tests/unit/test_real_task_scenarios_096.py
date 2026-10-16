@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
 from unittest.mock import MagicMock
 import pytest
 
@@ -78,7 +79,7 @@ def test_scenario_workspace_code_and_shell_execution(tmp_path: Path) -> None:
     assert res_w.success is True
 
     # Step 2: Execute python script via terminal
-    res_sh = exec_tool.execute({"command": "python3 app.py"})
+    res_sh = exec_tool.execute({"command": f'"{sys.executable}" app.py'})
     assert res_sh.success is True
     assert "v1.0" in res_sh.output
 
@@ -91,7 +92,7 @@ def test_scenario_workspace_code_and_shell_execution(tmp_path: Path) -> None:
     assert res_p.success is True
 
     # Step 4: Verify patch via terminal execution
-    res_sh2 = exec_tool.execute({"command": "python3 app.py"})
+    res_sh2 = exec_tool.execute({"command": f'"{sys.executable}" app.py'})
     assert res_sh2.success is True
     assert "v2.0" in res_sh2.output
 

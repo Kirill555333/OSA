@@ -61,6 +61,7 @@ def test_macos_desktop_applications_parsing() -> None:
         assert apps[0].running is True
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS-only automation backend.")
 def test_macos_desktop_launch_and_close_application() -> None:
     backend = MacOSDesktopAutomation()
 
