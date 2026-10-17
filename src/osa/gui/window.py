@@ -139,6 +139,8 @@ class JarvisMainWindow(QMainWindow):
         self._worker.action_occurred.connect(self._action_feed.add_action)
         self._worker.screen_captured.connect(self._action_feed.update_screenshot_preview)
         self._worker.task_finished.connect(self._on_task_finished)
+        self._worker.listening_state_changed.connect(self._on_listening_state_changed)
+        self._worker.voice_text_received.connect(self._on_voice_text)
 
     def _on_send_clicked(self) -> None:
         text = self._input_field.text().strip()
@@ -152,17 +154,36 @@ class JarvisMainWindow(QMainWindow):
         threading.Thread(target=self._worker.execute_text_query, args=(text,), daemon=True).start()
 
     def _on_mic_clicked(self) -> None:
-        self._btn_mic.setEnabled(False)
-        self._btn_mic.setObjectName("MicButtonActive")
+        if self._worker.is_listening:
+            self._worker.stop_listening()
+        else:
+            self._worker.start_listening()
+
+    def _on_listening_state_changed(self, active: bool) -> None:
+        if active:
+            self._btn_mic.setText("⏹ Стоп")
+            self._btn_mic.setObjectName("MicButtonActive")
+        else:
+            self._btn_mic.setText("🎙 Говорить")
+            self._btn_mic.setObjectName("")
         self._btn_mic.style().unpolish(self._btn_mic)
         self._btn_mic.style().polish(self._btn_mic)
 
-        # Safe asynchronous execution
-        threading.Thread(target=self._worker.listen_and_process, daemon=True).start()
+    def _on_voice_text(self, text: str) -> None:
+        text = text.strip()
+        if not text:
+            return
+        self._input_field.setEnabled(False)
+        self._btn_send.setEnabled(False)
+        threading.Thread(
+            target=self._worker.execute_text_query,
+            args=(text,),
+            daemon=True,
+        ).start()
 
     def _on_voice_toggled(self) -> None:
         is_on = self._btn_voice_toggle.isChecked()
-        self._worker._voice_enabled = is_on
+        self._worker.set_voice_enabled(is_on)
         self._btn_voice_toggle.setText("🔊 ГОЛОС: ВКЛ" if is_on else "🔇 ГОЛОС: ВЫКЛ")
         color = ACCENT_GREEN if is_on else TEXT_MUTED
         self._btn_voice_toggle.setStyleSheet(f"color: {color}; border-color: {color};")
@@ -181,8 +202,4 @@ class JarvisMainWindow(QMainWindow):
     def _on_task_finished(self) -> None:
         self._input_field.setEnabled(True)
         self._btn_send.setEnabled(True)
-        self._btn_mic.setEnabled(True)
-        self._btn_mic.setObjectName("")
-        self._btn_mic.style().unpolish(self._btn_mic)
-        self._btn_mic.style().polish(self._btn_mic)
         self._input_field.setFocus()
