@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "osa"
-version = "0.2.12"
+dynamic = ["version"]
 description = "OSA — personal AI agent"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
@@ -29,6 +29,9 @@ osa = "osa.main:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
+
+[tool.setuptools.dynamic]
+version = { attr = "osa.version.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]

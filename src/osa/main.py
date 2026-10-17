@@ -68,9 +68,10 @@ from osa.tools import (
 )
 from osa.utils.logging import EventLogger
 from osa.utils.paths import resolve_osa_home, resolve_workspace
+from osa.version import __version__
 from osa.voice import OSAVoiceEngine, OSAVoiceListener
 
-VERSION = "1.5.0"
+VERSION = __version__
 LLAMA_SERVER_URL = "http://127.0.0.1:8080"
 
 

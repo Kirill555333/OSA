@@ -24,6 +24,7 @@ from osa.gui.theme import (
 )
 from osa.gui.widgets import ActionFeedWidget, ChatViewWidget, CoreOrbWidget
 from osa.gui.worker import AgentWorker
+from osa.version import __version__
 
 
 class JarvisMainWindow(QMainWindow):
@@ -31,7 +32,7 @@ class JarvisMainWindow(QMainWindow):
 
     def __init__(self, agent: Agent) -> None:
         super().__init__()
-        self.setWindowTitle("OSA — Personal AI Assistant HUD")
+        self.setWindowTitle(f"OSA {__version__} — Personal AI Assistant HUD")
         self.resize(1100, 720)
         self.setMinimumSize(850, 550)
         self.setStyleSheet(MAIN_STYLESHEET)
@@ -42,7 +43,11 @@ class JarvisMainWindow(QMainWindow):
         self._connect_signals()
 
         # Emit initial status
-        self._worker.action_occurred.emit("⚡", "Инициализация", "OSA v1.5 Ядро готово к работе")
+        self._worker.action_occurred.emit(
+            "⚡",
+            "Инициализация",
+            f"OSA {__version__} ядро готово к работе",
+        )
 
     def _setup_ui(self) -> None:
         central_widget = QWidget()
