@@ -12,16 +12,29 @@ license = { text = "MIT" }
 authors = [
     { name = "OSA Project" }
 ]
-dependencies = []
+dependencies = [
+    "numpy>=1.26",
+    "sounddevice>=0.5,<0.6",
+    "faster-whisper>=1.2.1,<2.0",
+]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0,<9.0",
-    "ruff>=0.9,<1.0"
+    "ruff>=0.9,<1.0",
+]
+gui = [
+    "PySide6>=6.6",
+]
+browser = [
+    "playwright>=1.40",
+]
+windows = [
+    "pywinauto>=0.6.9,<1.0",
+    "Pillow>=10.0",
 ]
 voice = [
-    "faster-whisper>=1.2.1,<2.0",
-    "piper-tts>=1.8.0,<2.0"
+    "edge-tts>=6.1",
 ]
 
 [project.scripts]
