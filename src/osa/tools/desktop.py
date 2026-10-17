@@ -15,6 +15,8 @@ from typing import Any
 
 from osa.desktop.automation import DesktopPoint
 from osa.desktop.factory import create_desktop_automation
+from osa.models.interface import ChatMessage, ModelInterface, ModelRequest
+from osa.models.interface import ChatMessage, ModelInterface, ModelRequest
 
 # Re-exported for backward compatibility; implementations live in desktop_apps.
 from osa.tools.desktop_apps import CloseApplicationTool, LaunchApplicationTool  # noqa: F401
@@ -161,8 +163,9 @@ class HotkeyTool(ToolInterface):
 class InspectScreenTool(ToolInterface):
     """Tool to capture and visually inspect the desktop screen using Qwen2.5-VL."""
 
-    def __init__(self) -> None:
+    def __init__(self, model: ModelInterface | None = None) -> None:
         self._automation = create_desktop_automation()
+        self._model = model
 
     @property
     def name(self) -> str:
@@ -199,6 +202,24 @@ class InspectScreenTool(ToolInterface):
             else:
                 png_bytes = self._automation.screenshot()
                 out_path.write_bytes(png_bytes)
+
+            if self._model is not None:
+                req = ModelRequest(
+                    messages=(
+                        ChatMessage(
+                            role="user",
+                            content=f"[image_path: {out_path}]\n{query}",
+                        ),
+                    ),
+                    temperature=0.1,
+                    max_tokens=512,
+                )
+                resp = self._model.generate(req)
+                return ToolResult(
+                    success=True,
+                    output=resp.content.strip() or "Не удалось распознать экран.",
+                    metadata={"screenshot": str(out_path)},
+                )
 
             b64_img = base64.b64encode(out_path.read_bytes()).decode("utf-8")
 

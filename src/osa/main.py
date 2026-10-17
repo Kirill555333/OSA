@@ -129,7 +129,7 @@ def create_agent(
     tool_registry.register(SystemInfoTool(create_system_provider()))
 
     # Complete Desktop & Vision tools
-    tool_registry.register(InspectScreenTool())
+    tool_registry.register(InspectScreenTool(model))
     tool_registry.register(LaunchApplicationTool())
     tool_registry.register(CloseApplicationTool())
     tool_registry.register(ListApplicationsTool())
@@ -241,7 +241,11 @@ def create_agent(
         "(например, https://www.youtube.com/results?search_query=... или "
         "https://www.google.com/search?q=...), подставив запрос пользователя в "
         "именительном падеже, без выдуманных слов.\n"
-        "5. Если действие не нужно, просто ответь."
+        "5. Если пользователь просит открыть, запустить или включить любое приложение "
+        "(например: «открой калькулятор», «включи хром», «запусти телеграм»), "
+        "ВСЕГДА используй инструмент launch_application. Не пытайся использовать "
+        "другие инструменты для открытия программ.\n"
+        "6. Если действие не нужно, просто ответь."
     )
 
     # Desktop input tools go through the desktop safety rules: confirmation for

@@ -163,9 +163,15 @@ class JarvisMainWindow(QMainWindow):
         if active:
             self._btn_mic.setText("⏹ Стоп")
             self._btn_mic.setObjectName("MicButtonActive")
+            self._input_field.setPlaceholderText("🎙 Слушаю... (скажите «Оса, ...»)")
+            self._status_desc.setText("СЛУШАЮ (МИКРОФОН ВКЛЮЧЕН)")
         else:
             self._btn_mic.setText("🎙 Говорить")
             self._btn_mic.setObjectName("")
+            self._input_field.setPlaceholderText(
+                "Напишите команду или вопрос для OSA (например: 'хочу куплинова посмотреть')..."
+            )
+            self._status_desc.setText("СПИТ (ЖДУ СЛОВО 'ОСА')")
         self._btn_mic.style().unpolish(self._btn_mic)
         self._btn_mic.style().polish(self._btn_mic)
 
