@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 
 def main() -> int:
@@ -12,9 +11,10 @@ def main() -> int:
     from osa.gui.window import JarvisMainWindow
     from osa.main import create_agent
     from osa.memory import LongTermMemory
+    from osa.utils.paths import resolve_osa_home
 
-    workspace_dir = Path.cwd()
-    data_dir = workspace_dir / "data"
+    osa_home = resolve_osa_home()
+    data_dir = osa_home / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
 
     memory_storage = LongTermMemory(data_dir / "osa-memory.db")

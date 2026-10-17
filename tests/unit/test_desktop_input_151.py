@@ -111,10 +111,10 @@ def test_press_key_still_works() -> None:
 
 def _screenshot(filename: str | None) -> tuple[Path, Path]:
     tool, _ = _with_backend(TakeScreenshotTool)
-    previous = os.getcwd()
+    previous_home = os.environ.get("OSA_HOME")
 
     with tempfile.TemporaryDirectory() as folder:
-        os.chdir(folder)
+        os.environ["OSA_HOME"] = folder
 
         try:
             arguments = {} if filename is None else {"filename": filename}
@@ -127,7 +127,10 @@ def _screenshot(filename: str | None) -> tuple[Path, Path]:
 
             return written.resolve().relative_to(root), inside.relative_to(root)
         finally:
-            os.chdir(previous)
+            if previous_home is None:
+                os.environ.pop("OSA_HOME", None)
+            else:
+                os.environ["OSA_HOME"] = previous_home
 
 
 def test_screenshot_defaults_to_latest_png() -> None:

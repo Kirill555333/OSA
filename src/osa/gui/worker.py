@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from PySide6.QtCore import QObject, Signal
 
 from osa.core import Agent
+from osa.utils.paths import resolve_osa_home
 from osa.voice import OSAVoiceEngine, OSAVoiceListener
 
 
@@ -55,7 +54,7 @@ class AgentWorker(QObject):
             self.message_received.emit("assistant", output)
 
             # Check if screenshot was taken
-            latest_screen = Path.cwd() / "data" / "screenshots" / "latest.png"
+            latest_screen = resolve_osa_home() / "data" / "screenshots" / "latest.png"
             if latest_screen.exists() and latest_screen.stat().st_size > 1024:
                 self.screen_captured.emit(str(latest_screen))
 

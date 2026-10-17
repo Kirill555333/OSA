@@ -7,7 +7,6 @@ import os
 import signal
 import sys
 import urllib.request
-from pathlib import Path
 from typing import Any
 
 from osa.actions.desktop_tool_safety import DesktopToolSafetyPolicy, ForegroundProbe
@@ -68,6 +67,7 @@ from osa.tools import (
     WriteFileTool,
 )
 from osa.utils.logging import EventLogger
+from osa.utils.paths import resolve_osa_home, resolve_workspace
 from osa.voice import OSAVoiceEngine, OSAVoiceListener
 
 VERSION = "1.5.0"
@@ -113,9 +113,10 @@ def create_agent(
         reserved_output_tokens=512,
     )
 
-    workspace_dir = Path.cwd()
-    data_dir = workspace_dir / "data"
+    osa_home = resolve_osa_home()
+    data_dir = osa_home / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
+    workspace_dir = resolve_workspace()
 
     if memory_storage is None:
         memory_storage = LongTermMemory(data_dir / "osa-memory.db")
@@ -218,7 +219,7 @@ def create_agent(
     if confirmation_handler is None:
         confirmation_handler = create_interactive_confirmation_handler()
 
-    logs_dir = workspace_dir / "logs"
+    logs_dir = osa_home / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
     event_logger = EventLogger(logs_dir / "osa-events.jsonl")
 
@@ -271,8 +272,8 @@ def run_interactive_loop(voice_enabled: bool = True) -> None:
     """Main interactive conversational loop with Native Tool Calling & Voice."""
     setup_signal_handler()
 
-    workspace_dir = Path.cwd()
-    data_dir = workspace_dir / "data"
+    osa_home = resolve_osa_home()
+    data_dir = osa_home / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     memory_storage = LongTermMemory(data_dir / "osa-memory.db")
 
@@ -376,8 +377,8 @@ def run_listening_loop(listen_mode: str, voice_enabled: bool = True) -> None:
 
     setup_signal_handler()
 
-    workspace_dir = Path.cwd()
-    data_dir = workspace_dir / "data"
+    osa_home = resolve_osa_home()
+    data_dir = osa_home / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     memory_storage = LongTermMemory(data_dir / "osa-memory.db")
 
@@ -410,7 +411,7 @@ def run_listening_loop(listen_mode: str, voice_enabled: bool = True) -> None:
     debug_sink = None
 
     if debug_enabled:
-        debug_sink = create_debug_sink(workspace_dir / "logs" / "voice-debug.log")
+        debug_sink = create_debug_sink(osa_home / "logs" / "voice-debug.log")
 
     gate = WakeWordGate(
         wake_config_from_env(os.environ),

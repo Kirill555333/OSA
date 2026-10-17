@@ -3,23 +3,26 @@
 from __future__ import annotations
 
 import base64
-from collections.abc import Mapping
 import ctypes
 import json
-from pathlib import Path
 import subprocess
 import sys
 import time
-from typing import Any
 import urllib.request
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
 
 from osa.desktop.automation import DesktopPoint
 from osa.desktop.factory import create_desktop_automation
+
 # Re-exported for backward compatibility; implementations live in desktop_apps.
 from osa.tools.desktop_apps import CloseApplicationTool, LaunchApplicationTool  # noqa: F401
+from osa.tools.registry import ToolInterface, ToolResult
+
 # Re-exported for backward compatibility; the implementation lives in web_link.
 from osa.tools.web_link import OpenUrlTool  # noqa: F401
-from osa.tools.registry import ToolInterface, ToolResult
+from osa.utils.paths import resolve_osa_home
 
 
 class TypeTextTool(ToolInterface):
@@ -186,7 +189,7 @@ class InspectScreenTool(ToolInterface):
         query = str(arguments.get("query", "What is visible on screen?")).strip()
         try:
             print(" [⚡ Компьютерное зрение: снимок экрана...]", flush=True)
-            screenshots_dir = Path.cwd() / "data" / "screenshots"
+            screenshots_dir = resolve_osa_home() / "data" / "screenshots"
             screenshots_dir.mkdir(parents=True, exist_ok=True)
             out_path = screenshots_dir / "latest.png"
 
@@ -261,7 +264,7 @@ class TakeScreenshotTool(ToolInterface):
 
     def execute(self, arguments: Mapping[str, Any]) -> ToolResult:
         try:
-            screenshots_dir = Path.cwd() / "data" / "screenshots"
+            screenshots_dir = resolve_osa_home() / "data" / "screenshots"
             screenshots_dir.mkdir(parents=True, exist_ok=True)
 
             requested = str(arguments.get("filename", "")).strip()
