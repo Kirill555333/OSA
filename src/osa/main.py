@@ -95,6 +95,37 @@ def check_llama_server(url: str | None = None) -> bool:
         return False
 
 
+def check_all_models() -> tuple[bool, list[str]]:
+    """Probe reasoning and vision model endpoints from config.
+
+    Returns (all_ok, lines). Each line is a human-readable status string.
+    """
+    try:
+        models_config = load_models_config()
+    except Exception as exc:
+        return False, [f"[!] Config error: {exc}"]
+
+    lines: list[str] = []
+    all_ok = True
+
+    for role in ("reasoning", "vision"):
+        cfg = models_config.get(role)
+
+        if cfg is None:
+            continue
+
+        ok = check_llama_server(cfg.base_url)
+        mark = "[\u2713]" if ok else "[\u2717]"
+        lines.append(
+            f"{mark} {role}: {cfg.base_url} ({cfg.model_name})"
+        )
+
+        if not ok:
+            all_ok = False
+
+    return all_ok, lines
+
+
 def create_agent(
     memory_storage: LongTermMemory | None = None,
     confirmation_handler: ConfirmationHandler | None = None,
@@ -572,13 +603,10 @@ def main() -> None:
         sys.exit(0)
 
     if args.check:
-        ok = check_llama_server()
-        if ok:
-            print(f"[✓] llama.cpp server is ONLINE ({LLAMA_SERVER_URL})")
-            sys.exit(0)
-        else:
-            print(f"[✗] llama.cpp server is OFFLINE ({LLAMA_SERVER_URL})")
-            sys.exit(1)
+        ok, lines = check_all_models()
+        for line in lines:
+            print(line)
+        sys.exit(0 if ok else 1)
 
     if not args.push_to_talk:
         # Default: background listening (say 'Оса, ...' or type); see --listen
