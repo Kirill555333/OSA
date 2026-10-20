@@ -13,7 +13,8 @@ import json
 import re
 import urllib.parse
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import os
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +33,11 @@ from osa.models.interface import (
 class LlamaCppConfig:
     """Connection settings for a local llama.cpp server."""
 
-    base_url: str = "http://127.0.0.1:8080"
+    base_url: str = field(
+        default_factory=lambda: os.environ.get(
+            "OSA_LLAMA_URL", "http://127.0.0.1:8080"
+        )
+    )
     timeout: float = 60.0
     model_name: str = "qwen2.5-vl-3b"
 

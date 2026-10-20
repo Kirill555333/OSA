@@ -83,9 +83,10 @@ def setup_signal_handler() -> None:
     signal.signal(signal.SIGINT, _sigint_handler)
 
 
-def check_llama_server(url: str = LLAMA_SERVER_URL) -> bool:
+def check_llama_server(url: str | None = None) -> bool:
+    base = url if url is not None else os.environ.get("OSA_LLAMA_URL", LLAMA_SERVER_URL)
     try:
-        req = urllib.request.Request(f"{url.rstrip('/')}/health", method="GET")
+        req = urllib.request.Request(f"{base.rstrip('/')}/health", method="GET")
         with urllib.request.urlopen(req, timeout=3.0) as resp:
             return resp.status in (200, 503)
     except Exception:
