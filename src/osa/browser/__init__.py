@@ -1,3 +1,5 @@
+"""Browser components for OSA."""
+
 from osa.browser.automation import (
     BrowserAutomationActionError,
     BrowserAutomationConnectionError,
@@ -14,6 +16,13 @@ from osa.browser.http import (
     HttpBrowser,
     HttpBrowserConfig,
 )
+from osa.browser.interface import (
+    BrowserConnectionError,
+    BrowserError,
+    BrowserInterface,
+    BrowserPage,
+    BrowserResponseError,
+)
 from osa.browser.playwright import (
     PlaywrightBrowser,
     PlaywrightBrowserConfig,
@@ -24,22 +33,27 @@ from osa.browser.safety import (
     create_default_browser_safety_policy,
 )
 
-"""Browser components for OSA."""
-
-from osa.browser.interface import (
-    BrowserConnectionError,
-    BrowserError,
-    BrowserInterface,
-    BrowserPage,
-    BrowserResponseError,
-)
-
 __all__ = [
+    "BrowserAutomationActionError",
+    "BrowserAutomationConnectionError",
+    "BrowserAutomationError",
+    "BrowserAutomationInterface",
     "BrowserConnectionError",
-    "HttpBrowser",
-    "HttpBrowserConfig",
+    "BrowserElement",
     "BrowserError",
     "BrowserInterface",
+    "BrowserLocator",
     "BrowserPage",
+    "BrowserPageObservation",
     "BrowserResponseError",
+    "BrowserSafetyError",
+    "BrowserSafetyPolicy",
+    "BrowserTab",
+    "FakeBrowserAutomation",
+    "HttpBrowser",
+    "HttpBrowserConfig",
+    "PlaywrightBrowser",
+    "PlaywrightBrowserConfig",
+    "create_default_browser_safety_policy",
+    "create_fake_browser_automation",
 ]
