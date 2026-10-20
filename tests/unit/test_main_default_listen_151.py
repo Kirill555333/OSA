@@ -25,7 +25,8 @@ def test_background_listening_is_the_default_mode() -> None:
         return
 
     assert "if not args.push_to_talk:" in source
-    assert 'run_listening_loop(args.listen or "wake", voice_enabled=True)' in source
+    assert 'run_listening_loop(args.listen or "wake", voice_enabled=voice_enabled)' in source
+    assert "voice_enabled = not args.no_voice" in source
 
 
 def test_legacy_press_enter_mode_stays_available_behind_a_flag() -> None:
@@ -35,4 +36,5 @@ def test_legacy_press_enter_mode_stays_available_behind_a_flag() -> None:
         return
 
     assert '"--push-to-talk"' in source
-    assert "run_interactive_loop(voice_enabled=True)" in source
+    assert "run_interactive_loop(voice_enabled=voice_enabled)" in source
+    assert '"--no-voice"' in source
