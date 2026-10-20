@@ -67,6 +67,7 @@ from osa.tools import (
     WriteFileTool,
 )
 from osa.utils.logging import EventLogger
+from osa.prompts import load_system_prompt
 from osa.utils.config import load_models_config
 from osa.utils.paths import resolve_osa_home, resolve_workspace
 from osa.version import __version__
@@ -223,29 +224,7 @@ def create_agent(
     logs_dir.mkdir(parents=True, exist_ok=True)
     event_logger = EventLogger(logs_dir / "osa-events.jsonl")
 
-    system_prompt = (
-        "Ты — OSA (Оса), персональный ассистент с доступом к компьютеру пользователя. "
-        "Отвечай кратко, вежливо и по-русски.\n\n"
-        "Правила:\n"
-        "1. Если просьба требует действия на компьютере (открыть или закрыть программу "
-        "или сайт, найти что-то в интернете, переключить окно, напечатать текст, нажать "
-        "клавишу, изменить громкость, посмотреть на экран, запомнить что-то), вызови "
-        "подходящий инструмент через механизм вызова инструментов. Не записывай вызов "
-        "текстом и не описывай, что собираешься сделать.\n"
-        "2. Не сообщай, что действие выполнено, пока инструмент не вернул результат. "
-        "Если инструмент вернул ошибку, честно скажи об этом и предложи вариант.\n"
-        "3. Не уверен в названии программы или окна — сначала вызови list_applications "
-        "или list_windows и выбери из реального списка.\n"
-        "4. Для поиска в интернете или видео вызови open_url с готовой ссылкой поиска "
-        "(например, https://www.youtube.com/results?search_query=... или "
-        "https://www.google.com/search?q=...), подставив запрос пользователя в "
-        "именительном падеже, без выдуманных слов.\n"
-        "5. Если пользователь просит открыть, запустить или включить любое приложение "
-        "(например: «открой калькулятор», «включи хром», «запусти телеграм»), "
-        "ВСЕГДА используй инструмент launch_application. Не пытайся использовать "
-        "другие инструменты для открытия программ.\n"
-        "6. Если действие не нужно, просто ответь."
-    )
+    system_prompt = load_system_prompt()
 
     # Desktop input tools go through the desktop safety rules: confirmation for
     # protected applications, destructive hotkeys and blocked combinations.

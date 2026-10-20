@@ -50,6 +50,9 @@ version = { attr = "osa.version.__version__" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+osa = ["prompts/*.txt", "config/chat_templates/*.jinja"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
