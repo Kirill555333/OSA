@@ -581,7 +581,16 @@ def run_listening_loop(listen_mode: str, voice_enabled: bool = True) -> None:
 def main() -> None:
     """Main CLI entrypoint."""
     parser = argparse.ArgumentParser(description="OSA — Personal AI Desktop Assistant")
-    parser.add_argument("--voice", action="store_true", help="Enable voice output (TTS)")
+    parser.add_argument(
+        "--voice",
+        action="store_true",
+        help="Enable voice output (TTS). Default is enabled; kept for compatibility.",
+    )
+    parser.add_argument(
+        "--no-voice",
+        action="store_true",
+        help="Disable voice output (TTS) entirely.",
+    )
     parser.add_argument(
         "--listen",
         nargs="?",
@@ -610,13 +619,21 @@ def main() -> None:
             print(line)
         sys.exit(0 if ok else 1)
 
+    if args.voice and args.no_voice:
+        print(
+            "[!] --voice and --no-voice are mutually exclusive; --no-voice wins.",
+            file=sys.stderr,
+        )
+
+    voice_enabled = not args.no_voice
+
     if not args.push_to_talk:
         # Default: background listening (say 'Оса, ...' or type); see --listen
-        run_listening_loop(args.listen or "wake", voice_enabled=True)
+        run_listening_loop(args.listen or "wake", voice_enabled=voice_enabled)
         return
 
     # Legacy mode: type text or press Enter to record a phrase
-    run_interactive_loop(voice_enabled=True)
+    run_interactive_loop(voice_enabled=voice_enabled)
 
 
 if __name__ == "__main__":
