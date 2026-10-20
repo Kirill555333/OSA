@@ -372,7 +372,8 @@ class DesktopActionAdapter(ActionHandler):
     ) -> dict[str, Any]:
         normalized = cls._normalize_value(value)
 
-        if isinstance(normalized,list):            output = "\n".join(
+        if isinstance(normalized, list):
+            output = "\n".join(
                 str(item)
                 for item in normalized
             )

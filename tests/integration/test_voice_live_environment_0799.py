@@ -22,7 +22,6 @@ from osa.browser import (
     PlaywrightBrowser,
     PlaywrightBrowserConfig,
 )
-from osa.browser.playwright import PlaywrightBrowserConfig
 from osa.core.agent_recovery import AgentRecoveryIntegration
 from osa.core.agent_voice_action import AgentVoiceActionAdapter
 from osa.desktop import WindowsDesktopAutomation

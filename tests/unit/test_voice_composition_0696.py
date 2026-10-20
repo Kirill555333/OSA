@@ -304,13 +304,6 @@ def test_default_runtime_rejects_invalid_factory():
 
 
 def test_default_runtime_factory_can_fail_closed():
-    factory = DesktopAudioBackendFactory(
-        windows=UnavailableAudioBackend(
-            AudioPlatform.WINDOWS,
-        ),
-        enable_default_provider=False,
-    )
-
     class WindowsOnlyFactory(
         DesktopAudioBackendFactory
     ):

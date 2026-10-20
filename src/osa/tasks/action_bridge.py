@@ -85,7 +85,7 @@ class AutonomousActionBridge:
         """
         Execute one autonomous action through the unified pipeline.
         """
-        normalized_run_id = self._normalize_identifier(
+        self._normalize_identifier(
             run_id,
             "run_id",
         )

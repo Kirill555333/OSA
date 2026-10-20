@@ -45,7 +45,7 @@ def test_retrieval_prefers_memory_with_more_matching_terms(
         tmp_path
     )
 
-    partial = memory.save(
+    memory.save(
         "OSA использует Python.",
         category="general",
         importance=5,

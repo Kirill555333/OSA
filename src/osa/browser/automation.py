@@ -149,7 +149,6 @@ class BrowserAutomationInterface(ABC):
     ) -> str:
         """Read visible text from the page or selected element."""
 
-    @abstractmethod
     def observe(
         self,
         *,
@@ -157,14 +156,6 @@ class BrowserAutomationInterface(ABC):
         max_elements: int = 100,
     ) -> BrowserPageObservation:
         """Return a bounded structured observation of the active page."""
-
-    @abstractmethod
-    def observe(
-        self,
-        *,
-        max_text_characters: int = 12_000,
-        max_elements: int = 100,
-    ) -> BrowserPageObservation:
         if max_text_characters <= 0:
             raise ValueError(
                 "max_text_characters must be greater than zero."
