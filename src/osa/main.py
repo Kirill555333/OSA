@@ -67,6 +67,7 @@ from osa.tools import (
     WriteFileTool,
 )
 from osa.utils.logging import EventLogger
+from osa.utils.config import load_models_config
 from osa.utils.paths import resolve_osa_home, resolve_workspace
 from osa.version import __version__
 from osa.voice import OSAVoiceEngine, OSAVoiceListener
@@ -99,12 +100,9 @@ def create_agent(
     wake_names: Any | None = None,
 ) -> Agent:
     """Build and configure the main OSA agent with complete native Tool Calling."""
-    model = LlamaCppModel(
-        LlamaCppConfig(
-            base_url=LLAMA_SERVER_URL,
-            timeout=45.0,
-        )
-    )
+    models_config = load_models_config()
+    model = LlamaCppModel(models_config['reasoning'])
+    vision_model = LlamaCppModel(models_config['vision'])
 
     server_n_ctx = model.context_size()
     if not isinstance(server_n_ctx, int) or server_n_ctx <= 0:
@@ -130,7 +128,7 @@ def create_agent(
     tool_registry.register(SystemInfoTool(create_system_provider()))
 
     # Complete Desktop & Vision tools
-    tool_registry.register(InspectScreenTool(model))
+    tool_registry.register(InspectScreenTool(vision_model))
     tool_registry.register(LaunchApplicationTool())
     tool_registry.register(CloseApplicationTool())
     tool_registry.register(ListApplicationsTool())

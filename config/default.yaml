@@ -1,0 +1,21 @@
+# OSA configuration (4.4). Секция models: определяет клиентов моделей.
+# По умолчанию reasoning и vision смотрят на один сервер (OSA_LLAMA_URL или 127.0.0.1:8080).
+#
+# Чтобы использовать 8B для рассуждений (на Windows, два сервера на разных портах):
+#   models:
+#     reasoning:
+#       base_url: "http://127.0.0.1:8081"
+#       model_name: "qwen3-8b"
+#       timeout: 60.0
+#     vision:
+#       base_url: "http://127.0.0.1:8080"
+#       model_name: "qwen2.5-vl-3b"
+#       timeout: 60.0
+#
+# Приоритет: YAML explicit base_url > OSA_LLAMA_URL env > 127.0.0.1:8080.
+
+models:
+  reasoning:
+    timeout: 45.0
+  vision:
+    timeout: 60.0
