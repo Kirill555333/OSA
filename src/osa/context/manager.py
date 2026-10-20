@@ -50,7 +50,9 @@ class ContextManager:
         self._compactor = compactor or ContextCompactor(token_estimator=self._estimator)
         self._summary_builder = summary_builder or SummaryBuilder()
         self._memory_retriever = memory_retriever
-        self._default_system_prompt = default_system_prompt.strip() if default_system_prompt else None
+        self._default_system_prompt = (
+            default_system_prompt.strip() if default_system_prompt else None
+        )
 
         self._current_summary: ConversationSummary = ConversationSummary.empty()
 

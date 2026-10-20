@@ -27,7 +27,11 @@ def test_terminal_confirmation_prompt_yes() -> None:
     inp = io.StringIO("y\n")
     out = io.StringIO()
 
-    result = terminal_confirmation_prompt("Delete temporary file?", input_stream=inp, output_stream=out)
+    result = terminal_confirmation_prompt(
+        "Delete temporary file?",
+        input_stream=inp,
+        output_stream=out,
+    )
     assert result is True
     assert "[ACTION CONFIRMATION REQUIRED]" in out.getvalue()
     assert "Delete temporary file?" in out.getvalue()

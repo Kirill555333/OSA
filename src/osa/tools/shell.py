@@ -168,7 +168,8 @@ class TerminalExecuteTool(ToolInterface):
     @property
     def description(self) -> str:
         return (
-            "Execute a shell command inside the OSA workspace with safety guards and output capture."
+            "Execute a shell command inside the OSA workspace "
+            "with safety guards and output capture."
         )
 
     @property
@@ -241,7 +242,11 @@ class TerminalExecuteTool(ToolInterface):
         combined_output = "\n".join(output_parts) or "(command completed with no output)"
 
         success = result.returncode == 0
-        error_msg = None if success else f"Command exited with non-zero status code: {result.returncode}"
+        error_msg = (
+            None
+            if success
+            else f"Command exited with non-zero status code: {result.returncode}"
+        )
 
         return ToolResult(
             success=success,

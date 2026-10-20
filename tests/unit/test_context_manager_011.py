@@ -157,7 +157,10 @@ def test_context_manager_hard_overflow_fails_closed() -> None:
 
     manager = ContextManager(
         budget=tiny_budget,
-        default_system_prompt="A system prompt that is much larger than twenty tokens to trigger budget overflow.",
+        default_system_prompt=(
+            "A system prompt that is much larger than twenty tokens "
+            "to trigger budget overflow."
+        ),
     )
 
     messages = [ChatMessage(role="user", content="A message that also has words.")]

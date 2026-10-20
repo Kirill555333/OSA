@@ -44,7 +44,12 @@ def test_non_desktop_action_allowed() -> None:
 
 def test_read_only_actions_allowed() -> None:
     policy = DesktopActionSafetyPolicy()
-    for action in ("desktop_screenshot", "desktop_applications", "desktop_windows", "desktop_health_check"):
+    for action in (
+        "desktop_screenshot",
+        "desktop_applications",
+        "desktop_windows",
+        "desktop_health_check",
+    ):
         req = ActionRequest(
             kind=ActionKind.DESKTOP,
             name=action,
@@ -59,7 +64,12 @@ def test_read_only_mode_blocks_mutations() -> None:
     policy = DesktopActionSafetyPolicy(config)
 
     # Screenshot is read-only -> ALLOW
-    req_shot = ActionRequest(kind=ActionKind.DESKTOP, name="desktop_screenshot", arguments={}, request_id="r1")
+    req_shot = ActionRequest(
+        kind=ActionKind.DESKTOP,
+        name="desktop_screenshot",
+        arguments={},
+        request_id="r1",
+    )
     assert policy.evaluate(req_shot).decision is ActionDecision.ALLOW
 
     # Click is mutation -> DENY

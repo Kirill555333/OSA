@@ -28,7 +28,12 @@ def test_voice_command_standby_notice() -> None:
     agent = _mock_agent()
     out = io.StringIO()
     # Shell without voice_runtime
-    shell = InteractiveShell(agent, voice_runtime=None, input_stream=io.StringIO(), output_stream=out)
+    shell = InteractiveShell(
+        agent,
+        voice_runtime=None,
+        input_stream=io.StringIO(),
+        output_stream=out,
+    )
 
     shell.handle_command("/voice")
     output = out.getvalue()

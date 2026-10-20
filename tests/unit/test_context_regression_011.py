@@ -170,7 +170,10 @@ def test_tool_heavy_chat_compaction() -> None:
 
 
 def test_cross_session_memory_sharing_and_message_isolation(tmp_path: Path) -> None:
-    """Multiple sessions share LongTermMemory while maintaining strictly isolated message histories."""
+    """Multiple sessions share LongTermMemory.
+
+    Message histories remain strictly isolated.
+    """
     db_file = tmp_path / "osa-memory.db"
     ltm = LongTermMemory(db_file)
     retriever = MemoryRetriever(ltm)

@@ -10,7 +10,12 @@ from osa.tools.registry import ToolResult
 class OutputTruncator:
     """Safely truncates huge outputs from shell/browser/file tools."""
 
-    def __init__(self, max_characters: int = 4000, head_lines: int = 30, tail_lines: int = 30) -> None:
+    def __init__(
+        self,
+        max_characters: int = 4000,
+        head_lines: int = 30,
+        tail_lines: int = 30,
+    ) -> None:
         self.max_characters = max_characters
         self.head_lines = head_lines
         self.tail_lines = tail_lines
@@ -52,7 +57,10 @@ class ActionLoopDetector:
         self._history.clear()
 
 
-def apply_tool_guardrail(result: ToolResult, truncator: OutputTruncator | None = None) -> ToolResult:
+def apply_tool_guardrail(
+    result: ToolResult,
+    truncator: OutputTruncator | None = None,
+) -> ToolResult:
     """Ensure tool result output does not blow up LLM context window."""
     if not result.success or not result.output:
         return result

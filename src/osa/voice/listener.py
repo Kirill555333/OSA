@@ -9,7 +9,10 @@ from typing import Any
 import numpy as np
 import sounddevice as sd
 
-INITIAL_PROMPT = "Разговор с персональным AI-ассистентом OSA (Оса, Джарвис). Команды: открой тг, напиши другу, закрой, запомни, звук, wolfcut, булат."
+INITIAL_PROMPT = (
+    "Разговор с персональным AI-ассистентом OSA (Оса, Джарвис). "
+    "Команды: открой тг, напиши другу, закрой, запомни, звук, wolfcut, булат."
+)
 
 
 class OSAVoiceListener:

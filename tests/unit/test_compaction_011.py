@@ -125,7 +125,8 @@ def test_context_compactor_atomic_unit_preservation() -> None:
     # System is retained at index 0
     assert result.retained_messages[0].role == "system"
 
-    # Evicted messages must contain the entirety of Task 1 (user, assistant+call, tool, assistant response)
+    # Evicted messages must contain the entirety of Task 1
+    # (user, assistant+call, tool, assistant response).
     evicted_roles = [m.role for m in result.evicted_messages]
     assert evicted_roles == ["user", "assistant", "tool", "assistant"]
 
