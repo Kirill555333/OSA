@@ -9,13 +9,14 @@ OSA = agent system + memory + actions + safety + recovery + autonomy + observabi
 LLM = заменяемый интеллектуальный backend
 ```
 
-- **Текущая версия:** 1.5.1.5 (Clean Cognitive Core, нативный tool calling, контекст и раунды)
+- **Текущая версия:** 4.8 (модельный слой: URL через env, tool_choice, reasoning+vision, два клиента, промпт в файле)
 - **Платформы:** macOS (основная разработка, MacBook Air M1, 8 ГБ) и Windows (целевой ПК: Ryzen 5 5500, RX 6600 8 ГБ, 16 ГБ RAM)
 - **Python:** 3.12–3.13
-- **Тесты:** 2048 passed, 9 skipped на macOS; 2033 passed, 10 skipped на Windows (пропущены живой звук, Windows UI Automation, Playwright Chromium и платформенные guard'ы)
+- **Тесты:** 2101 passed, 9 skipped на macOS (пропущены живой звук, Windows UI Automation, Playwright Chromium и платформенные guard'ы)
 - **Модель по умолчанию:** Qwen2.5-VL-3B-Instruct (Q4_K_M + mmproj Q8_0) через локальный `llama-server`
+- **Модельный слой (4.x):** `OSA_LLAMA_URL` (URL), `OSA_TOOL_CHOICE` (`auto`/`required`/`none`), `OSA_SYSTEM_PROMPT` (путь к своему промпту), `config/default.yaml` (`models:` с `reasoning` и `vision`)
 
-> Статус документа: обновлён 2026-10-17 по состоянию 1.5.1.5. Всё, что не проверено кодом или тестами, помечено «не проверено».
+> Статус документа: обновлён 2026-10-20 по состоянию 4.8. Всё, что не проверено кодом или тестами, помечено «не проверено».
 
 ---
 
@@ -130,6 +131,66 @@ git diff --check
 
 ---
 
+## Модельный слой
+
+С 4.x OSA держит два клиента: `reasoning` и `vision`. По умолчанию оба смотрят на `127.0.0.1:8080`.
+
+### URL сервера
+
+Приоритет: явный `LlamaCppConfig(base_url=...)` > `OSA_LLAMA_URL` env > `http://127.0.0.1:8080`.
+
+### `tool_choice`
+
+`OSA_TOOL_CHOICE` = `auto` (по умолчанию) | `required` | `none`. `required` заставляет модель всегда вызывать инструмент — полезно, если 3B «болтает» вместо вызова.
+
+### `config/default.yaml`
+
+```yaml
+models:
+  reasoning:
+    base_url: "http://127.0.0.1:8081"
+    model_name: "qwen3-8b"
+    timeout: 45.0
+  vision:
+    base_url: "http://127.0.0.1:8080"
+    model_name: "qwen2.5-vl-3b"
+    timeout: 60.0
+```
+
+Обе роли опциональны. Без секции `models:` оба клиента идут на `OSA_LLAMA_URL`.
+
+### Системный промпт
+
+По умолчанию: `src/osa/prompts/system_ru.txt`. Переопределяется: `OSA_SYSTEM_PROMPT=/path/to/file.txt`.
+
+### Проверка
+
+`osa --check` пробует `reasoning` и `vision` и печатает статус каждой.
+
+### Две модели на Windows
+
+RX 6600 (8 ГБ VRAM) не тянет 8B + 3B одновременно. Рабочая схема — два `llama-server` на разных портах:
+
+```bash
+llama-server -m models/qwen3-8b.gguf --port 8081 --jinja -c 8192
+llama-server -m models/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf \
+  --mmproj models/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf \
+  --port 8080 --jinja -c 8192
+```
+
+### Env-переменные
+
+| Переменная | Что делает | По умолчанию |
+|---|---|---|
+| `OSA_LLAMA_URL` | URL по умолчанию для обеих моделей | `http://127.0.0.1:8080` |
+| `OSA_TOOL_CHOICE` | `auto` / `required` / `none` | `auto` |
+| `OSA_SYSTEM_PROMPT` | Путь к system prompt | `system_ru.txt` в пакете |
+| `OSA_HOME` | Данные OSA | `~/.osa` |
+| `OSA_WORKSPACE` | Разрешённые файлы | `cwd` |
+| `OSA_STT_MODEL` | Whisper размер в терминале | `small` |
+
+---
+
 ## История версий
 
 | Версия | Содержание |
@@ -151,6 +212,15 @@ git diff --check
 | 1.5.1.0–1.5.1.4 | Управление рабочим столом: fail-closed парсер, инструменты через `DesktopAutomationInterface`, ссылки без shell, честные отказы на неподдержанных платформах |
 | 1.5.1.5 | Контекст и раунды: `AgentMaxRoundsError` без отката истории, убран `agent.reset()` из `main.py`, бюджет из `/props` сервера |
 | 1.5.2.0–1.5.2.5 | Голос: фоновое прослушивание по умолчанию, wake word «Оса», единый ввод клавиатуры и голоса, `/listen`, `/name`, `/heard` |
+| 1.5.3.0 | GUI: фоновое прослушивание (Start/Stop), вызов агента из голоса, mute при TTS |
+| 4.1 | `OSA_LLAMA_URL` env для URL сервера |
+| 4.2 | `tool_choice` в `ModelRequest`, knob `OSA_TOOL_CHOICE` |
+| 4.3 | `InspectScreenTool(model=...)` через `ModelInterface` |
+| 4.4 | `config/default.yaml` секция `models:`; два клиента reasoning+vision |
+| 4.5 | Тесты на подключение двух клиентов в `create_agent` |
+| 4.6 | `system_ru.txt` + `OSA_SYSTEM_PROMPT` |
+| 4.7 | `osa --check` пробует reasoning + vision |
+| 4.8 | `ARCHITECTURE.md` с разделом «Models» |
 
 Эксперимент с облачными моделями (клиенты внешних API и окно ввода на PySide6) отложен в отдельную локальную ветку и в `main` не входит. Основной курс — локальные модели, потому что доступность внешних API нестабильна.
 
