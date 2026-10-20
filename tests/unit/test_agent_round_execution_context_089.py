@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from osa.actions.contracts import ActionKind, ActionRequest, ActionResult
+from osa.actions.contracts import ActionRequest, ActionResult
 from osa.core import Agent
 from osa.core.agent_recovery import AgentRecoveryIntegration
 from osa.core.execution_context import ExecutionContext

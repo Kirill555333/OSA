@@ -8,7 +8,6 @@ import wave
 from array import array
 from dataclasses import dataclass
 from struct import pack
-from typing import Any
 
 from osa.voice.contracts import VoiceInput
 

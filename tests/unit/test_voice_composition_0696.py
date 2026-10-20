@@ -13,7 +13,6 @@ from osa.voice.composition import (
 )
 from osa.voice.contracts import (
     VoiceInput,
-    VoiceSessionState,
     VoiceTranscript,
 )
 from osa.voice.platform import (

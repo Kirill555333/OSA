@@ -95,7 +95,6 @@ def extract_research_urls(
     texts: Iterable[str],
 ) -> tuple[str, ...]:
     """Extract unique HTTP(S) URLs from arbitrary text fragments."""
-    from osa.research.researcher import WebResearcher
 
     seen: set[str] = set()
     urls: list[str] = []

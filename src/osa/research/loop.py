@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from osa.research.interface import ResearchReport, ResearchSource
+from osa.research.interface import ResearchSource
 from osa.research.researcher import WebResearcher
 
 

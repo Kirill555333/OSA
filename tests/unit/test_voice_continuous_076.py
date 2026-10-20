@@ -15,7 +15,6 @@ from osa.voice.continuous import (
 )
 from osa.voice.contracts import (
     VoiceInput,
-    VoiceOutput,
     VoiceSessionState,
     VoiceTranscript,
 )

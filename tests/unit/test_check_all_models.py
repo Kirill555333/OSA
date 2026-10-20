@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
 
 
 def test_check_all_models_both_ok(monkeypatch, tmp_path):

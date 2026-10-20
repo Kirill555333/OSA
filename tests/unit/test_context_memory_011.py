@@ -7,7 +7,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from osa.context import (
-    BudgetedMemoryResult,
     BudgetedMemoryRetriever,
     ConservativeTokenEstimator,
 )

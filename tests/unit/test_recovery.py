@@ -2,7 +2,6 @@ import pytest
 
 from osa.models import (
     ModelConnectionError,
-    ModelError,
     ModelResponseError,
 )
 from osa.recovery import (

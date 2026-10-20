@@ -6,7 +6,6 @@ from osa.planning import Plan, PlanStep
 from osa.tasks import (
     TaskAction,
     TaskManager,
-    VerificationResult,
     create_default_task_verifier,
 )
 from osa.tools import SafeFilesystem, ToolResult

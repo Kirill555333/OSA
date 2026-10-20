@@ -5,7 +5,6 @@ from __future__ import annotations
 import sys
 from unittest.mock import patch
 
-import pytest
 
 
 def _run_main(monkeypatch, argv: list[str]) -> dict:

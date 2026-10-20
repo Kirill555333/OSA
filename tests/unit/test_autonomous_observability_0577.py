@@ -8,10 +8,8 @@ from osa.observability import (
     ObservableAutonomousLoop,
 )
 from osa.tasks.autonomous import (
-    AutonomousCycle,
     AutonomousLoop,
     AutonomousLoopConfig,
-    AutonomousRunReport,
     AutonomousTaskResult,
 )
 

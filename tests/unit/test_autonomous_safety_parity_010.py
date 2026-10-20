@@ -13,7 +13,6 @@ from osa.actions.pipeline import (
     CallbackActionConfirmationHandler,
     CallbackActionPolicy,
 )
-from osa.actions.router import ActionRouter
 from osa.tasks.action_bridge import AutonomousActionBridge
 from osa.tasks.autonomous import AutonomousTaskResult
 

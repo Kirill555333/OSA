@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from osa.voice.audio import FakeMicrophone
 from osa.voice.contracts import (
     VoiceInput,
-    VoiceOutput,
     VoiceSessionState,
     VoiceTranscript,
 )
@@ -18,7 +17,6 @@ from osa.voice.runtime import (
 )
 from osa.voice.session import (
     VoiceSession,
-    VoiceSessionResult,
 )
 
 

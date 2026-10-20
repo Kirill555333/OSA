@@ -6,7 +6,6 @@ from osa.actions import ActionKind, ActionRequest, ActionResult
 from osa.observability import (
     InMemoryObservabilityLogger,
     ObservabilityContext,
-    ObservabilityEvent,
     ObservableActionExecution,
 )
 

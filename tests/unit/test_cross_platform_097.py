@@ -4,21 +4,17 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from osa.actions import (
     ActionKind,
     ActionRequest,
-    ActionRouter,
-    ActionSafetyPipeline,
-    AllowAllActionPolicy,
 )
 from osa.actions.desktop import DesktopActionAdapter
 from osa.desktop import (
     DesktopAutomationConnectionError,
-    DesktopAutomationInterface,
     FakeDesktopAutomation,
     MacOSDesktopAutomation,
     WindowsDesktopAutomation,

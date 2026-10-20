@@ -6,7 +6,6 @@ import io
 from dataclasses import dataclass
 from unittest.mock import MagicMock
 
-import pytest
 
 from osa.core import Agent
 from osa.models import ModelInterface, ModelResponse

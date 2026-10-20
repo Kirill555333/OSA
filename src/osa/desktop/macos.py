@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import ctypes
-import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
 
 from osa.desktop.automation import (
     DesktopApplication,
@@ -19,7 +17,6 @@ from osa.desktop.automation import (
     DesktopElement,
     DesktopElementLocator,
     DesktopPoint,
-    DesktopRect,
     DesktopWindow,
 )
 

@@ -7,12 +7,9 @@ from dataclasses import dataclass
 from osa.actions.contracts import (
     ActionKind,
     ActionRequest,
-    ActionResult,
 )
 from osa.core.execution_context import ExecutionContext
-from osa.recovery_contracts import RecoveryResult
 from osa.tasks.action_bridge import (
-    AutonomousActionBridge,
     AutonomousActionResolver,
 )
 from osa.tasks.autonomous import AutonomousTaskResult

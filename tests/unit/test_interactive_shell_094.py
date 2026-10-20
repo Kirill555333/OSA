@@ -5,14 +5,12 @@ from __future__ import annotations
 import io
 from unittest.mock import MagicMock
 
-import pytest
 
 from osa.core import Agent
 from osa.core.modes import AgentMode
 from osa.models import ModelInterface, ModelResponse, ModelStreamEvent
 from osa.shell import (
     InteractiveShell,
-    create_interactive_confirmation_handler,
     terminal_confirmation_prompt,
 )
 

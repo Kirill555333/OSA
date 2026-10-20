@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
 
 from osa.tasks.action import TaskAction
 from osa.tasks.manager import Task

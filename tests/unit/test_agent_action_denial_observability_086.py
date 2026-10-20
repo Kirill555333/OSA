@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from osa.core import Agent, PermissionDeniedError
+from osa.core import Agent
 from osa.models import ModelInterface, ModelRequest, ModelResponse, ToolCall
 from osa.permissions import PermissionLevel, PermissionPolicy
 from osa.tools import CalculatorTool, ToolRegistry

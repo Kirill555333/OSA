@@ -20,7 +20,6 @@ from osa.memory import (
 from osa.memory.integration import MemoryIntegration
 from osa.memory.retrieval import MemoryRetriever
 from osa.models import (
-    LlamaCppConfig,
     LlamaCppModel,
 )
 from osa.permissions import (

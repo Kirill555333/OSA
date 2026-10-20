@@ -20,7 +20,6 @@ from osa.observability.autonomous_action import (
     ObservableAutonomousActionBridge,
 )
 from osa.tasks.action_bridge import AutonomousActionBridge
-from osa.tasks.autonomous import AutonomousTaskResult
 from osa.tasks.autonomous_executor import UnifiedAutonomousExecutor
 from osa.tasks.autonomous_recovery import (
     AutonomousRecoveryDecision,

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from time import perf_counter
 from typing import Any, Protocol
 
-from osa.actions.contracts import ActionKind, ActionRequest, ActionResult
+from osa.actions.contracts import ActionRequest, ActionResult
 from osa.observability.context import ObservabilityContext
 from osa.observability.events import ObservabilityEvent
 from osa.observability.logger import (

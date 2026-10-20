@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
 
-from osa.context import ContextBudget, ContextManager
+from osa.context import ContextBudget
 from osa.core import Agent
 from osa.memory.integration import MemoryIntegration, MemoryIntegrationResult
 from osa.memory.long_term import MemoryRecord
 from osa.memory.retrieval import MemorySearchResult
-from osa.models import ChatMessage, ModelInterface, ModelRequest, ModelResponse
+from osa.models import ModelInterface, ModelRequest, ModelResponse
 
 
 def _create_mock_model(reply: str = "Assistant reply") -> MagicMock:

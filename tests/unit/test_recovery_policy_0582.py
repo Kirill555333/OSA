@@ -4,7 +4,6 @@ import pytest
 
 from osa.recovery_contracts import (
     RecoveryAttempt,
-    RecoveryContractError,
     RecoveryDecision,
     RecoveryFailureKind,
     RecoveryRequest,

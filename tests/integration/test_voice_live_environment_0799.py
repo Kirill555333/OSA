@@ -17,11 +17,8 @@ from osa.actions import (
     BrowserActionAdapter,
     DesktopActionAdapter,
 )
-from osa.actions.browser import BrowserActionAdapterError
-from osa.actions.contracts import ActionResult
 from osa.browser import (
     BrowserAutomationError,
-    BrowserLocator,
     PlaywrightBrowser,
     PlaywrightBrowserConfig,
 )

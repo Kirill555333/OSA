@@ -10,7 +10,6 @@ import pytest
 from osa.actions.contracts import ActionKind, ActionRequest
 from osa.context import (
     BudgetedMemoryRetriever,
-    ContextBudget,
     ContextManager,
     ConversationSummary,
     SummaryBuilder,
