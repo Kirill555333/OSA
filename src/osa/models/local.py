@@ -186,6 +186,8 @@ class LlamaCppModel(ModelInterface):
                 }
                 for tool in request_data.tools
             ]
+            if request_data.tool_choice != "auto":
+                payload["tool_choice"] = request_data.tool_choice
 
         body = json.dumps(payload).encode("utf-8")
         resp = None

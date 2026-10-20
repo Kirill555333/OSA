@@ -271,6 +271,7 @@ def create_agent(
         memory_integration=memory_integration,
         action_safety_policy=action_safety_policy,
         context_budget=context_budget,
+        tool_choice=os.environ.get("OSA_TOOL_CHOICE", "auto"),
     )
 
 

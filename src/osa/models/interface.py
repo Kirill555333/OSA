@@ -59,6 +59,7 @@ class ModelRequest:
     temperature: float = 0.2
     max_tokens: int = 512
     tools: tuple[ToolDefinition, ...] = ()
+    tool_choice: str = "auto"
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
 

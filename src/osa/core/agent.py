@@ -113,6 +113,7 @@ class Agent:
         context_manager: ContextManager | None = None,
         context_budget: ContextBudget | None = None,
         action_safety_policy: object | None = None,
+        tool_choice: str = "auto",
     ) -> None:
         if not 0.0 <= temperature <= 2.0:
             raise ValueError(
@@ -133,6 +134,7 @@ class Agent:
         self._temperature = temperature
         self._max_tokens = max_tokens
         self._max_tool_rounds = max_tool_rounds
+        self._tool_choice = tool_choice
         self._context = ConversationContext(system_prompt)
         self._tool_registry = tool_registry or ToolRegistry()
         self._event_logger = event_logger
@@ -408,6 +410,7 @@ class Agent:
                     temperature=self._temperature,
                     max_tokens=self._max_tokens,
                     tools=self._available_tool_definitions(),
+                    tool_choice=self._tool_choice,
                 )
 
                 accumulator = AgentStreamAccumulator()
@@ -1080,6 +1083,7 @@ class Agent:
                 temperature=self._temperature,
                 max_tokens=self._max_tokens,
                 tools=self._available_tool_definitions(),
+                tool_choice=self._tool_choice,
             )
 
             started_at = time.perf_counter()
