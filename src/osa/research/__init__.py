@@ -1,16 +1,15 @@
-from osa.research.loop import (
-    ResearchLoop,
-    ResearchLoopConfig,
-    ResearchLoopError,
-    ResearchLoopReport,
-)
-
 from osa.research.interface import (
     ResearchError,
     ResearchReport,
     ResearchSearchError,
     ResearchSource,
     ResearchSourceError,
+)
+from osa.research.loop import (
+    ResearchLoop,
+    ResearchLoopConfig,
+    ResearchLoopError,
+    ResearchLoopReport,
 )
 from osa.research.researcher import (
     WebResearchConfig,

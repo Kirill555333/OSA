@@ -7,8 +7,8 @@ import pytest
 
 from osa.voice.contracts import VoiceOutput
 from osa.voice.piper_tts import (
-    PiperTTSConfig,
     PiperTextToSpeech,
+    PiperTTSConfig,
     create_piper_tts,
 )
 from osa.voice.tts import TextToSpeechError

@@ -12,7 +12,6 @@ from typing import Any, Callable
 from osa.voice.contracts import VoiceOutput
 from osa.voice.tts import TextToSpeech, TextToSpeechError
 
-
 SynthesisConfigFactory = Callable[..., Any]
 
 

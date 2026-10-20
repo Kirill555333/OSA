@@ -2,9 +2,9 @@
 
 from osa.planning.planner import (
     Plan,
-    PlanStep,
     Planner,
     PlannerError,
+    PlanStep,
 )
 
 __all__ = [

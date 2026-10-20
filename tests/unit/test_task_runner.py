@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from osa.planning import Plan, PlanStep
-from osa.tasks.verification import (
-    TaskVerifier,
-    VerificationResult,
-)
 from osa.models import ModelInterface
+from osa.planning import Plan, PlanStep
 from osa.tasks import (
-    create_default_planned_task_runner,
     ActionResolver,
     PlannedTaskRunner,
     TaskAction,
     TaskExecutor,
     TaskManager,
+    create_default_planned_task_runner,
+)
+from osa.tasks.verification import (
+    TaskVerifier,
+    VerificationResult,
 )
 from osa.tools import ToolResult
 

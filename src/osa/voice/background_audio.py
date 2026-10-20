@@ -8,9 +8,9 @@ imported lazily, so importing this module is cheap and safe without them.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
 import queue
 import threading
+from collections.abc import Callable, Iterable
 from typing import Any
 
 _DEFAULT_PROMPT = "Разговор с ассистентом по имени Оса."

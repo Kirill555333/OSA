@@ -4,7 +4,6 @@ import importlib
 
 import osa.observability as observability
 
-
 EXPECTED_EXPORTS = {
     "ActionPipelineLike",
     "ObservableActionRouter",

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import io
+from dataclasses import dataclass
 from unittest.mock import MagicMock
+
 import pytest
 
 from osa.core import Agent

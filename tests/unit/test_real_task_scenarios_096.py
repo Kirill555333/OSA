@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock
+
 import pytest
 
 from osa.actions import (
@@ -23,7 +24,14 @@ from osa.core import Agent
 from osa.core.agent_voice_action import TaskActionResolverVoiceAdapter
 from osa.core.execution_context import ExecutionContext
 from osa.desktop.automation import create_fake_desktop_automation
-from osa.models import ChatMessage, ModelInterface, ModelRequest, ModelResponse, ToolCall, ToolDefinition
+from osa.models import (
+    ChatMessage,
+    ModelInterface,
+    ModelRequest,
+    ModelResponse,
+    ToolCall,
+    ToolDefinition,
+)
 from osa.planning.planner import Plan, Planner, PlanStep
 from osa.tasks.action import TaskAction, TaskActionResolver
 from osa.tasks.manager import Task

@@ -8,11 +8,11 @@ through a shell. The same code runs on macOS, Windows and Linux.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
 import re
+import webbrowser
+from collections.abc import Callable, Mapping
 from typing import Any
 from urllib.parse import quote, urlsplit, urlunsplit
-import webbrowser
 
 from osa.tools.registry import ToolInterface, ToolResult
 

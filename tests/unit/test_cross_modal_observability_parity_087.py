@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 from osa.actions.contracts import ActionKind, ActionRequest, ActionResult
 from osa.core import Agent

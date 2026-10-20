@@ -1,7 +1,4 @@
 """Public voice API for OSA 0.7.x."""
-from osa.voice.engine import OSAVoiceEngine
-from osa.voice.listener import OSAVoiceListener
-
 from osa.voice.activation import (
     AlwaysActiveVoiceActivationDetector,
     KeywordVoiceActivationDetector,
@@ -41,11 +38,13 @@ from osa.voice.contracts import (
     VoiceSessionState,
     VoiceTranscript,
 )
+from osa.voice.engine import OSAVoiceEngine
 from osa.voice.faster_whisper_stt import (
     FasterWhisperConfig,
     FasterWhisperSpeechToText,
     create_faster_whisper_stt,
 )
+from osa.voice.listener import OSAVoiceListener
 from osa.voice.normalization import (
     AudioNormalizationConfig,
     AudioNormalizationError,
@@ -54,8 +53,8 @@ from osa.voice.normalization import (
     create_voice_audio_normalizer,
 )
 from osa.voice.piper_tts import (
-    PiperTTSConfig,
     PiperTextToSpeech,
+    PiperTTSConfig,
     create_piper_tts,
 )
 from osa.voice.platform import (
@@ -89,11 +88,6 @@ from osa.voice.session import (
     VoiceSessionResult,
     VoiceSessionStateError,
 )
-from osa.voice.stt import (
-    FixedSpeechToText,
-    SpeechToText,
-    SpeechToTextError,
-)
 from osa.voice.streaming import (
     BufferedSpeechToTextStream,
     ChunkedTextToSpeechStream,
@@ -104,6 +98,11 @@ from osa.voice.streaming import (
     VoiceStreamingState,
     create_buffered_stt_stream,
     create_chunked_tts_stream,
+)
+from osa.voice.stt import (
+    FixedSpeechToText,
+    SpeechToText,
+    SpeechToTextError,
 )
 from osa.voice.tts import (
     FixedTextToSpeech,

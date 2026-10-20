@@ -7,8 +7,8 @@ from osa.actions.contracts import (
 )
 from osa.observability import (
     InMemoryObservabilityLogger,
-    ObservableActionSafetyPipeline,
     ObservabilityContext,
+    ObservableActionSafetyPipeline,
 )
 
 

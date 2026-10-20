@@ -8,7 +8,6 @@ from dataclasses import dataclass
 
 from osa.memory.long_term import LongTermMemory, MemoryRecord
 
-
 _STOP_WORDS = frozenset(
     {
         # English.

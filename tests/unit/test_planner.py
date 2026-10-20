@@ -10,9 +10,9 @@ from osa.models import (
 )
 from osa.planning import (
     Plan,
-    PlanStep,
     Planner,
     PlannerError,
+    PlanStep,
 )
 
 

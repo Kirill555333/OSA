@@ -11,7 +11,6 @@ from osa.models import (
     ModelError,
 )
 
-
 T = TypeVar("T")
 
 

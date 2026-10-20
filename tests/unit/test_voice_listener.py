@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
+
 import numpy as np
 
 from osa.voice.listener import OSAVoiceListener

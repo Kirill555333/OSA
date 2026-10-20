@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-
 _FALLBACK = (
     "Ты — OSA (Оса), персональный ассистент с доступом к компьютеру пользователя. "
     "Отвечай кратко, вежливо и по-русски."

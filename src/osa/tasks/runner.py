@@ -14,11 +14,11 @@ from osa.tasks.executor import (
     TaskExecutionReport,
     TaskExecutor,
 )
-from osa.tasks.verification import TaskVerifier
 from osa.tasks.manager import (
     Task,
     TaskManager,
 )
+from osa.tasks.verification import TaskVerifier
 from osa.tools import ToolResult
 
 

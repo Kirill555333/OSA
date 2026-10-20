@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from osa.tools.registry import ToolResult
 
 

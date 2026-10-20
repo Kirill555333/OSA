@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections import deque
 import struct
 import threading
 import time
+from collections import deque
 
 import pytest
 

@@ -16,12 +16,12 @@ from osa.tasks.action_bridge import (
     AutonomousActionResolver,
 )
 from osa.tasks.autonomous import AutonomousTaskResult
+from osa.tasks.autonomous_executor import UnifiedAutonomousExecutor
 from osa.tasks.autonomous_recovery import (
     AutonomousRecoveryDecision,
     AutonomousRecoveryExecutor,
     CallbackAutonomousRecoveryPolicy,
 )
-from osa.tasks.autonomous_executor import UnifiedAutonomousExecutor
 
 
 @dataclass

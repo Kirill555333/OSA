@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import subprocess
 import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 
 from osa.tools import desktop as desktop_module

@@ -1,10 +1,5 @@
 """Core components of OSA."""
 
-from osa.core.modes import (
-    AgentMode,
-    AgentModePolicy,
-    AgentModeProfile,
-)
 from osa.core.agent import (
     Agent,
     AgentError,
@@ -20,6 +15,11 @@ from osa.core.agent_voice_action import (
     create_agent_voice_action_adapter,
 )
 from osa.core.context import ConversationContext
+from osa.core.modes import (
+    AgentMode,
+    AgentModePolicy,
+    AgentModeProfile,
+)
 
 __all__ = [
     "AgentMode",

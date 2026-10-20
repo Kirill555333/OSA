@@ -10,10 +10,20 @@ from osa.core import (
 )
 from osa.core.agent_voice_action import (
     AgentVoiceActionAdapter as DirectAgentVoiceActionAdapter,
+)
+from osa.core.agent_voice_action import (
     AgentVoiceActionIntegrationError as DirectIntegrationError,
+)
+from osa.core.agent_voice_action import (
     TaskActionResolverVoiceAdapter as DirectTaskResolverAdapter,
+)
+from osa.core.agent_voice_action import (
     VoiceActionResolver as DirectVoiceActionResolver,
+)
+from osa.core.agent_voice_action import (
     VoiceActionResponse as DirectVoiceActionResponse,
+)
+from osa.core.agent_voice_action import (
     create_agent_voice_action_adapter as DirectFactory,
 )
 from osa.voice import (
@@ -22,6 +32,8 @@ from osa.voice import (
 )
 from osa.voice.unified_action import (
     UnifiedVoiceActionCompositionError as DirectCompositionError,
+)
+from osa.voice.unified_action import (
     create_unified_voice_session as DirectSessionFactory,
 )
 

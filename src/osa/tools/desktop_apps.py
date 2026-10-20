@@ -10,13 +10,13 @@ passes model-provided text to a shell.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
 import difflib
-from pathlib import Path
 import re
 import sys
 import time
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from osa.desktop.automation import (

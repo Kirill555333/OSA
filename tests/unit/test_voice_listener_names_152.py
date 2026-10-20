@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections import deque
 import struct
 import time
+from collections import deque
 
 from osa.voice.background import BackgroundListener, VoiceCommand
 from osa.voice.background_audio import FasterWhisperTranscriber

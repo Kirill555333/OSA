@@ -16,7 +16,6 @@ from typing import Any
 from osa.desktop.automation import DesktopPoint
 from osa.desktop.factory import create_desktop_automation
 from osa.models.interface import ChatMessage, ModelInterface, ModelRequest
-from osa.models.interface import ChatMessage, ModelInterface, ModelRequest
 
 # Re-exported for backward compatibility; implementations live in desktop_apps.
 from osa.tools.desktop_apps import CloseApplicationTool, LaunchApplicationTool  # noqa: F401

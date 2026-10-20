@@ -11,7 +11,6 @@ from osa.memory.retrieval import (
     MemorySearchResult,
 )
 
-
 _STOP_WORDS = frozenset(
     {
         "a",

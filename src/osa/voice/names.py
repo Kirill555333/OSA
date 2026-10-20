@@ -8,13 +8,13 @@ same on every platform.
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
 import json
 import os
-from pathlib import Path
 import re
 import threading
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 BASE_DISPLAY_NAME = "Оса"

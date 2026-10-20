@@ -4,15 +4,14 @@ import os
 
 import pytest
 
-from osa.voice.platform import (
-    AudioPlatform,
-    create_default_audio_backend,
-)
 from osa.voice.audio import (
     AudioInputError,
     AudioOutputError,
 )
-
+from osa.voice.platform import (
+    AudioPlatform,
+    create_default_audio_backend,
+)
 
 RUN_LIVE_AUDIO = (
     os.environ.get(

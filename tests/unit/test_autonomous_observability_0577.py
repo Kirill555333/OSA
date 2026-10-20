@@ -4,8 +4,8 @@ import pytest
 
 from osa.observability import (
     InMemoryObservabilityLogger,
-    ObservableAutonomousLoop,
     ObservabilityContext,
+    ObservableAutonomousLoop,
 )
 from osa.tasks.autonomous import (
     AutonomousCycle,

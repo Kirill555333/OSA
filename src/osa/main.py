@@ -28,6 +28,7 @@ from osa.permissions import (
     PermissionLevel,
     PermissionPolicy,
 )
+from osa.prompts import load_system_prompt
 from osa.recovery import ErrorRecovery
 from osa.shell import (
     create_interactive_confirmation_handler,
@@ -66,9 +67,8 @@ from osa.tools import (
     WebResearchTool,
     WriteFileTool,
 )
-from osa.utils.logging import EventLogger
-from osa.prompts import load_system_prompt
 from osa.utils.config import load_agent_config, load_models_config
+from osa.utils.logging import EventLogger
 from osa.utils.paths import resolve_osa_home, resolve_workspace
 from osa.version import __version__
 from osa.voice import OSAVoiceEngine, OSAVoiceListener

@@ -9,9 +9,9 @@ from typing import Any, Protocol
 from uuid import uuid4
 
 from osa.actions.contracts import (
+    ActionKind,
     ActionRequest,
 )
-from osa.actions.contracts import ActionKind
 from osa.recovery_contracts import RecoveryResult
 from osa.tasks.action import (
     Task,

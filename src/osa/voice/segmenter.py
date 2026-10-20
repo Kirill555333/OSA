@@ -8,11 +8,11 @@ The adaptive detector structurally satisfies ``osa.voice.vad.VoiceActivityDetect
 
 from __future__ import annotations
 
+import math
+import sys
 from array import array
 from collections import deque
 from dataclasses import dataclass
-import math
-import sys
 from typing import Protocol
 
 

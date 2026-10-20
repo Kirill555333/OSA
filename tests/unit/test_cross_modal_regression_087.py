@@ -8,8 +8,8 @@ from typing import Any
 
 from osa.actions.contracts import ActionKind, ActionRequest, ActionResult
 from osa.core import Agent
-from osa.core.agent_voice_action import AgentVoiceActionAdapter
 from osa.core.agent_recovery import AgentRecoveryIntegration
+from osa.core.agent_voice_action import AgentVoiceActionAdapter
 from osa.models import (
     ModelInterface,
     ModelRequest,

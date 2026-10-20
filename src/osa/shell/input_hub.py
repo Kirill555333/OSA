@@ -9,11 +9,11 @@ spoken words can never confirm a dangerous action.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import queue
 import sys
 import threading
 import time
+from dataclasses import dataclass
 from typing import Any, TextIO
 
 

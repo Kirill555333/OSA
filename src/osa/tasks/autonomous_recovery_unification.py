@@ -10,7 +10,6 @@ from osa.recovery_contracts import (
 )
 from osa.recovery_controller import RecoveryController
 from osa.recovery_policy import RecoveryPolicy
-
 from osa.tasks.autonomous import (
     AutonomousBackend,
     AutonomousTaskResult,

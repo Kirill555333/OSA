@@ -30,9 +30,9 @@ from osa.core.agent_recovery import AgentRecoveryIntegration
 from osa.core.agent_voice_action import AgentVoiceActionAdapter
 from osa.desktop import WindowsDesktopAutomation
 from osa.recovery_action import RecoverableActionExecutor
+from osa.tools.browser_automation import create_browser_action_tools
 from osa.voice.contracts import VoiceInput, VoiceTranscript
 from osa.voice.session import VoiceSession
-from osa.tools.browser_automation import create_browser_action_tools
 
 
 class FakeVAD:

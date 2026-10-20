@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 from osa.voice import engine as engine_module

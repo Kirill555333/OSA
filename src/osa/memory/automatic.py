@@ -8,7 +8,6 @@ from dataclasses import dataclass
 
 from osa.memory.long_term import LongTermMemory
 
-
 _TOKEN_PATTERN = re.compile(
     r"\w+",
     re.UNICODE,

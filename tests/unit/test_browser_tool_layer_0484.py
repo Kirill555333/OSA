@@ -6,7 +6,6 @@ from osa.browser.automation import (
 )
 from osa.tools.browser_automation import create_browser_action_tools
 
-
 EXPECTED_TOOL_NAMES = (
     "browser_open",
     "browser_find",

@@ -6,9 +6,9 @@ from osa.core.agent import Agent, AgentError
 from osa.models.interface import (
     ChatMessage,
     ModelConnectionError,
+    ModelInterface,
     ModelRequest,
     ModelResponse,
-    ModelInterface,
 )
 
 

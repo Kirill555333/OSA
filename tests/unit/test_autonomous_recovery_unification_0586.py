@@ -12,7 +12,6 @@ from osa.recovery_contracts import (
     RecoveryResult,
 )
 from osa.recovery_policy import NeverRetryRecoveryPolicy
-
 from osa.tasks.autonomous import AutonomousTaskResult
 from osa.tasks.autonomous_recovery_unification import (
     AutonomousRecoveryUnificationError,

@@ -4,12 +4,12 @@ from osa.actions import ActionKind, ActionRequest, ActionResult
 from osa.actions.router import ActionRouter
 from osa.observability import (
     InMemoryObservabilityLogger,
-    ObservableActionExecution,
-    ObservableActionRouter,
     ObservabilityEvent,
     ObservabilityEventQuery,
     ObservabilityEventQueryAPI,
     ObservabilityRedactor,
+    ObservableActionExecution,
+    ObservableActionRouter,
     RedactingObservabilityLogger,
 )
 

@@ -9,7 +9,6 @@ from osa.observability.recovery_controller import (
     ObservableRecoveryController,
     ObservableRecoveryControllerError,
 )
-
 from osa.recovery_contracts import (
     RecoveryAttempt,
     RecoveryFailureKind,

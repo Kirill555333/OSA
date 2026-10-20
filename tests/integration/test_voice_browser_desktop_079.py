@@ -10,8 +10,8 @@ from osa.actions import (
     ActionKind,
     ActionPolicyDecision,
     ActionRequest,
-    ActionSafetyPipeline,
     ActionRouter,
+    ActionSafetyPipeline,
     BrowserActionAdapter,
     DesktopActionAdapter,
 )

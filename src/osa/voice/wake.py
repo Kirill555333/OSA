@@ -9,13 +9,13 @@ an injectable clock.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
-from dataclasses import dataclass
 import difflib
-from enum import Enum
 import re
 import time
 import unicodedata
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+from enum import Enum
 
 _WORD = re.compile(r"[\w\u0300-\u036f]+", re.UNICODE)
 _EDGE_PUNCTUATION = " \t\r\n,.:;!?-—–…"

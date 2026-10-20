@@ -7,9 +7,9 @@ from osa.voice import (
     FakeMicrophone,
     FakeSpeaker,
     VoiceInput,
+    VoiceRuntimeState,
     VoiceSessionState,
     VoiceTranscript,
-    VoiceRuntimeState,
     create_voice_runtime_from_backend,
 )
 from osa.voice.platform import (

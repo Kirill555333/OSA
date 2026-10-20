@@ -7,11 +7,11 @@ reporting and keyboard-only confirmation of dangerous actions.
 
 from __future__ import annotations
 
+import sys
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from pathlib import Path
-import sys
-import time
 from typing import Any
 
 from osa.voice.names import BASE_DISPLAY_NAME

@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from osa.actions.contracts import ActionKind, ActionRequest
+from osa.actions.contracts import ActionKind, ActionRequest, ActionResult
 from osa.core import Agent
-from osa.core.execution_context import ExecutionContext
 from osa.core.agent_recovery import AgentRecoveryIntegration
+from osa.core.execution_context import ExecutionContext
 from osa.models import (
     ModelInterface,
     ModelRequest,
@@ -18,7 +18,6 @@ from osa.models import (
 )
 from osa.permissions import PermissionLevel, PermissionPolicy
 from osa.recovery_contracts import RecoveryResult
-from osa.actions.contracts import ActionResult
 from osa.tools import ToolRegistry
 
 

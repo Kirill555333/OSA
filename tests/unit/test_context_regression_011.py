@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import MagicMock
+
 import pytest
 
 from osa.actions.contracts import ActionKind, ActionRequest
@@ -17,7 +18,14 @@ from osa.core.execution_context import ExecutionContext
 from osa.memory.integration import MemoryIntegration
 from osa.memory.long_term import LongTermMemory
 from osa.memory.retrieval import MemoryRetriever
-from osa.models import ChatMessage, ModelInterface, ModelRequest, ModelResponse, ToolCall, ToolDefinition
+from osa.models import (
+    ChatMessage,
+    ModelInterface,
+    ModelRequest,
+    ModelResponse,
+    ToolCall,
+    ToolDefinition,
+)
 
 
 def _mock_model(content: str = "Response") -> MagicMock:

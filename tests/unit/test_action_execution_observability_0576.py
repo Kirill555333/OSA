@@ -5,9 +5,9 @@ import pytest
 from osa.actions import ActionKind, ActionRequest, ActionResult
 from osa.observability import (
     InMemoryObservabilityLogger,
-    ObservableActionExecution,
     ObservabilityContext,
     ObservabilityEvent,
+    ObservableActionExecution,
 )
 
 

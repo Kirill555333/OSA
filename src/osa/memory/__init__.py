@@ -1,5 +1,10 @@
 """Memory components for OSA."""
 
+from osa.memory.automatic import (
+    AutomaticMemory,
+    AutomaticMemoryResult,
+    MemoryCandidate,
+)
 from osa.memory.long_term import (
     LongTermMemory,
     MemoryError,
@@ -8,12 +13,6 @@ from osa.memory.long_term import (
 from osa.memory.retrieval import (
     MemoryRetriever,
     MemorySearchResult,
-)
-
-from osa.memory.automatic import (
-    AutomaticMemory,
-    AutomaticMemoryResult,
-    MemoryCandidate,
 )
 
 __all__ = [

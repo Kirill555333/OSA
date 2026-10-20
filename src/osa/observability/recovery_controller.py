@@ -3,16 +3,15 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from osa.observability.logger import (
+    NullObservabilityLogger,
+    ObservabilityLogger,
+)
 from osa.recovery_contracts import (
     RecoveryRequest,
     RecoveryResult,
 )
 from osa.recovery_controller import RecoveryController
-
-from osa.observability.logger import (
-    ObservabilityLogger,
-    NullObservabilityLogger,
-)
 
 
 class ObservableRecoveryControllerError(RuntimeError):

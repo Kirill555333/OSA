@@ -6,9 +6,9 @@ from osa.actions import ActionKind, ActionRequest, ActionResult
 from osa.actions.router import ActionRouter
 from osa.observability import (
     InMemoryObservabilityLogger,
-    ObservableActionRouter,
     ObservabilityContext,
     ObservabilityEvent,
+    ObservableActionRouter,
 )
 
 

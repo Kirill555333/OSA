@@ -10,7 +10,6 @@ from typing import Any, Callable
 from osa.voice.contracts import VoiceInput, VoiceTranscript
 from osa.voice.stt import SpeechToText, SpeechToTextError
 
-
 AudioConverter = Callable[[bytes], Any]
 
 

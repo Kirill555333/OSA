@@ -12,12 +12,12 @@ is enabled explicitly.
 
 from __future__ import annotations
 
+import threading
+import time
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-import threading
-import time
 from typing import Protocol
 
 from osa.voice.segmenter import AdaptiveEnergyVad, UtteranceSegmenter
