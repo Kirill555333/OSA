@@ -68,7 +68,7 @@ from osa.tools import (
 )
 from osa.utils.logging import EventLogger
 from osa.prompts import load_system_prompt
-from osa.utils.config import load_models_config
+from osa.utils.config import load_agent_config, load_models_config
 from osa.utils.paths import resolve_osa_home, resolve_workspace
 from osa.version import __version__
 from osa.voice import OSAVoiceEngine, OSAVoiceListener
@@ -133,6 +133,7 @@ def create_agent(
 ) -> Agent:
     """Build and configure the main OSA agent with complete native Tool Calling."""
     models_config = load_models_config()
+    agent_config = load_agent_config()
     model = LlamaCppModel(models_config['reasoning'])
     vision_model = LlamaCppModel(models_config['vision'])
 
@@ -268,9 +269,10 @@ def create_agent(
     return Agent(
         model=model,
         system_prompt=system_prompt,
-        temperature=0.1,
+        temperature=agent_config.temperature,
         automatic_memory=automatic_memory,
-        max_tokens=512,
+        max_tokens=agent_config.max_tokens,
+        max_tool_rounds=agent_config.max_tool_rounds,
         tool_registry=tool_registry,
         event_logger=event_logger,
         permission_policy=permission_policy,
@@ -279,7 +281,7 @@ def create_agent(
         memory_integration=memory_integration,
         action_safety_policy=action_safety_policy,
         context_budget=context_budget,
-        tool_choice=os.environ.get("OSA_TOOL_CHOICE", "auto"),
+        tool_choice=agent_config.tool_choice,
     )
 
 

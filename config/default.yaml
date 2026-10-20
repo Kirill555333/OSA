@@ -14,6 +14,12 @@
 #
 # Приоритет: YAML explicit base_url > OSA_LLAMA_URL env > 127.0.0.1:8080.
 
+agent:
+  temperature: 0.1
+  max_tokens: 512
+  max_tool_rounds: 8
+  tool_choice: "auto"  # auto | required | none; OSA_TOOL_CHOICE env overrides this
+
 models:
   reasoning:
     timeout: 45.0
