@@ -78,6 +78,22 @@ def create_interactive_confirmation_handler() -> ConfirmationHandler:
 class InteractiveShell:
     """Interactive command shell managing session interaction, voice, and commands."""
 
+    @staticmethod
+    def _mode_value(agent: object) -> str:
+        """Return the current mode as a plain string (for display)."""
+        mode = getattr(agent, "mode", None)
+        if hasattr(mode, "value"):
+            return str(mode.value)
+        return str(mode)
+
+    @staticmethod
+    def _mode_value(agent: object) -> str:
+        """Return the current mode as a plain string (for display)."""
+        mode = getattr(agent, "mode", None)
+        if hasattr(mode, "value"):
+            return str(mode.value)
+        return str(mode)
+
     def __init__(
         self,
         agent: Agent,
@@ -94,7 +110,7 @@ class InteractiveShell:
     def print_banner(self) -> None:
         """Display the JARVIS-style startup banner."""
         model_name = self._agent.model.model_name
-        mode_val = self._agent.mode.value if hasattr(self._agent.mode, "value") else str(self._agent.mode)
+        mode_val = self._mode_value(self._agent)
         ctx_limit = self._agent.context_manager.budget.total_context_limit
         voice_status = "Available" if self._voice_runtime is not None else "Standby"
 
@@ -206,10 +222,18 @@ class InteractiveShell:
     def _cmd_status(self) -> None:
         budget = self._agent.context_manager.budget
         summary = self._agent.context_manager.current_summary
-        mode_val = self._agent.mode.value if hasattr(self._agent.mode, "value") else str(self._agent.mode)
+        mode_val = self._mode_value(self._agent)
         is_healthy = self._agent.model.health_check()
-        health_str = f"{ConsoleColors.GREEN}Healthy{ConsoleColors.RESET}" if is_healthy else f"{ConsoleColors.RED}Offline{ConsoleColors.RESET}"
-        voice_str = f"{ConsoleColors.GREEN}Connected{ConsoleColors.RESET}" if self._voice_runtime is not None else f"{ConsoleColors.DIM}Standby / Not Initialized{ConsoleColors.RESET}"
+        health_str = (
+            f"{ConsoleColors.GREEN}Healthy{ConsoleColors.RESET}"
+            if is_healthy
+            else f"{ConsoleColors.RED}Offline{ConsoleColors.RESET}"
+        )
+        voice_str = (
+            f"{ConsoleColors.GREEN}Connected{ConsoleColors.RESET}"
+            if self._voice_runtime is not None
+            else f"{ConsoleColors.DIM}Standby / Not Initialized{ConsoleColors.RESET}"
+        )
 
         status_text = (
             f"\n{ConsoleColors.BOLD}OSA System Status:{ConsoleColors.RESET}\n"
@@ -217,7 +241,7 @@ class InteractiveShell:
             f"  Voice Runtime:   {voice_str}\n"
             f"  Agent Mode:      {ConsoleColors.YELLOW}{mode_val}{ConsoleColors.RESET}\n"
             f"  Active Session:  {len(self._agent.context.messages())} messages in history\n"
-            f"  Summary State:   {'Active (' + str(summary.messages_summarized_count) + ' summarized)' if not summary.is_empty else 'None (recent chat)'}\n"
+            f"  Summary State:   {self._summary_label(summary)}\n"
             f"  Context Budget:  {budget.total_context_limit} total tokens\n"
             f"    - Input Max:   {budget.max_input_tokens} tokens\n"
             f"    - Reserved:    {budget.reserved_output_tokens} tokens\n"
@@ -228,9 +252,16 @@ class InteractiveShell:
         )
         self._write(status_text)
 
+    @staticmethod
+    def _summary_label(summary: object) -> str:
+        """Describe the current summary state for /status output."""
+        if getattr(summary, "is_empty", True):
+            return "None (recent chat)"
+        return f"Active ({summary.messages_summarized_count} summarized)"
+
     def _cmd_mode(self, args: list[str]) -> None:
         if not args:
-            current = self._agent.mode.value if hasattr(self._agent.mode, "value") else str(self._agent.mode)
+            current = self._mode_value(self._agent)
             self._write(f"Current mode: {ConsoleColors.YELLOW}{current}{ConsoleColors.RESET}\n\n")
             return
 

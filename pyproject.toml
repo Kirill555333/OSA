@@ -68,3 +68,6 @@ select = ["E", "F", "I"]
 [tool.ruff.lint.per-file-ignores]
 # HTML template strings in GUI widgets are long by nature.
 "src/osa/gui/widgets.py" = ["E501"]
+# ANSI-colored help/banner strings in the console shell; splitting
+# them would break the {ConsoleColors.X}...{RESET} pairs.
+"src/osa/shell/console.py" = ["E501"]
