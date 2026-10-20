@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from osa.models.local import LlamaCppConfig
 
 

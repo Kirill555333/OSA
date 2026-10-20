@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-
 from osa.context import ContextBudget
 from osa.core import Agent
 from osa.memory.integration import MemoryIntegration, MemoryIntegrationResult

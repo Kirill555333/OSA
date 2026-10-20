@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import patch
 
 
-
 def test_check_all_models_both_ok(monkeypatch, tmp_path):
     from osa import main as main_module
     from osa.models import LlamaCppConfig

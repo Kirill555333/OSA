@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-
-
 from osa.prompts import load_system_prompt
 
 

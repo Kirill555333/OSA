@@ -6,7 +6,6 @@ import sys
 from unittest.mock import patch
 
 
-
 def _run_main(monkeypatch, argv: list[str]) -> dict:
     """Run osa.main.main() with argv; return captured run_* calls."""
     from osa import main as main_module

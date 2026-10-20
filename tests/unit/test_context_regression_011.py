@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-
 from osa.actions.contracts import ActionKind, ActionRequest
 from osa.context import (
     ContextBudget,

@@ -5,7 +5,6 @@ from __future__ import annotations
 import io
 from unittest.mock import MagicMock
 
-
 from osa.core import Agent
 from osa.core.modes import AgentMode
 from osa.models import ModelInterface, ModelResponse, ModelStreamEvent

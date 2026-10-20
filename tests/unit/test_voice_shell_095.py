@@ -6,7 +6,6 @@ import io
 from dataclasses import dataclass
 from unittest.mock import MagicMock
 
-
 from osa.core import Agent
 from osa.models import ModelInterface, ModelResponse
 from osa.shell import InteractiveShell
