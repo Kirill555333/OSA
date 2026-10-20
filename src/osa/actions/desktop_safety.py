@@ -109,7 +109,12 @@ class DesktopActionSafetyPolicy:
         if action_name == "desktop_click_point":
             x = request.arguments.get("x")
             y = request.arguments.get("y")
-            if isinstance(x, int) and isinstance(y, int) and not isinstance(x, bool) and not isinstance(y, bool):
+            if (
+                isinstance(x, int)
+                and isinstance(y, int)
+                and not isinstance(x, bool)
+                and not isinstance(y, bool)
+            ):
                 if x < 0 or y < 0:
                     return ActionPolicyDecision(
                         ActionDecision.DENY,
@@ -120,7 +125,10 @@ class DesktopActionSafetyPolicy:
                     if x > max_w or y > max_h:
                         return ActionPolicyDecision(
                             ActionDecision.DENY,
-                            f"Click coordinates ({x}, {y}) exceed screen bounds ({max_w}, {max_h}).",
+                            (
+                                f"Click coordinates ({x}, {y}) exceed "
+                                f"screen bounds ({max_w}, {max_h})."
+                            ),
                         )
 
         # 3. Application termination guardrails
@@ -156,12 +164,23 @@ class DesktopActionSafetyPolicy:
                 if normalized_keys in self.BLOCKED_HOTKEYS:
                     return ActionPolicyDecision(
                         ActionDecision.DENY,
-                        f"Hotkey combination '{'+'.join(sorted(normalized_keys))}' is blocked for system safety.",
+                        (
+                            "Hotkey combination "
+                            f"'{'+'.join(sorted(normalized_keys))}' "
+                            "is blocked for system safety."
+                        ),
                     )
-                if self._config.confirm_destructive_hotkeys and normalized_keys in self.DESTRUCTIVE_HOTKEYS:
+                if (
+                    self._config.confirm_destructive_hotkeys
+                    and normalized_keys in self.DESTRUCTIVE_HOTKEYS
+                ):
                     return ActionPolicyDecision(
                         ActionDecision.CONFIRM,
-                        f"Executing application termination hotkey '{'+'.join(sorted(normalized_keys))}' requires confirmation.",
+                        (
+                            "Executing application termination hotkey "
+                            f"'{'+'.join(sorted(normalized_keys))}' "
+                            "requires confirmation."
+                        ),
                     )
 
         return ActionPolicyDecision(ActionDecision.ALLOW)
@@ -181,7 +200,10 @@ class CompositeActionPolicy:
             res = policy.evaluate(request)
             if res.decision is ActionDecision.DENY:
                 return res
-            if res.decision is ActionDecision.CONFIRM and final_decision.decision is not ActionDecision.CONFIRM:
+            if (
+                res.decision is ActionDecision.CONFIRM
+                and final_decision.decision is not ActionDecision.CONFIRM
+            ):
                 final_decision = res
 
         return final_decision

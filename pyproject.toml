@@ -64,3 +64,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# HTML template strings in GUI widgets are long by nature.
+"src/osa/gui/widgets.py" = ["E501"]

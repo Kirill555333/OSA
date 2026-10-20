@@ -83,7 +83,10 @@ class MacOSDesktopAutomation(DesktopAutomationInterface):
 
     def applications(self) -> tuple[DesktopApplication, ...]:
         """Return running non-background GUI applications."""
-        script = 'tell application "System Events" to get name of every application process whose background only is false'
+        script = (
+            'tell application "System Events" to get name of every '
+            "application process whose background only is false"
+        )
         try:
             output = self._run_osascript(script)
         except Exception:
@@ -285,7 +288,9 @@ class MacOSDesktopAutomation(DesktopAutomationInterface):
         self._require_macos()
 
         try:
-            cg = ctypes.cdll.LoadLibrary("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
+            cg = ctypes.cdll.LoadLibrary(
+                "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
+            )
             # CGPoint is (double x, double y)
             class CGPoint(ctypes.Structure):
                 _fields_ = [("x", ctypes.c_double), ("y", ctypes.c_double)]
@@ -307,7 +312,9 @@ class MacOSDesktopAutomation(DesktopAutomationInterface):
 
             pt = CGPoint(float(point.x), float(point.y))
 
-            down_ev = cg.CGEventCreateMouseEvent(None, kCGEventLeftMouseDown, pt, kCGMouseButtonLeft)
+            down_ev = cg.CGEventCreateMouseEvent(
+                None, kCGEventLeftMouseDown, pt, kCGMouseButtonLeft
+            )
             up_ev = cg.CGEventCreateMouseEvent(None, kCGEventLeftMouseUp, pt, kCGMouseButtonLeft)
 
             if down_ev and up_ev:

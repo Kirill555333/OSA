@@ -94,7 +94,12 @@ class CoreOrbWidget(QWidget):
         painter.drawEllipse(QRectF(-radius - 4, -radius - 4, (radius + 4) * 2, (radius + 4) * 2))
         painter.restore()
 
-        core_color = QColor(color.red(), color.green(), color.blue(), 180 if self._state != "idle" else 90)
+        core_color = QColor(
+            color.red(),
+            color.green(),
+            color.blue(),
+            180 if self._state != "idle" else 90,
+        )
         painter.setPen(QPen(color, 2))
         painter.setBrush(QBrush(core_color))
         painter.drawEllipse(center, radius - 8.0, radius - 8.0)
@@ -102,7 +107,11 @@ class CoreOrbWidget(QWidget):
         painter.setPen(QColor("#FFFFFF"))
         font = QFont("Helvetica", 11, QFont.Weight.Bold)
         painter.setFont(font)
-        painter.drawText(QRectF(0, 0, self.width(), self.height()), Qt.AlignmentFlag.AlignCenter, "OSA")
+        painter.drawText(
+            QRectF(0, 0, self.width(), self.height()),
+            Qt.AlignmentFlag.AlignCenter,
+            "OSA",
+        )
 
 
 class ActionFeedWidget(QFrame):
@@ -119,7 +128,10 @@ class ActionFeedWidget(QFrame):
 
         header_layout = QHBoxLayout()
         title = QLabel("LIVE TELEMETRY")
-        title.setStyleSheet(f"color: {ACCENT_CYAN}; font-weight: bold; font-size: 12px; letter-spacing: 1px;")
+        title.setStyleSheet(
+            f"color: {ACCENT_CYAN}; font-weight: bold; "
+            "font-size: 12px; letter-spacing: 1px;"
+        )
         header_layout.addWidget(title)
         header_layout.addStretch()
         layout.addLayout(header_layout)

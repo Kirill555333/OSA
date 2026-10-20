@@ -15,7 +15,12 @@ from osa.memory.long_term import MemoryRecord
 from osa.memory.retrieval import MemoryRetriever, MemorySearchResult
 
 
-def _make_record(mem_id: int, content: str, category: str = "general", importance: int = 5) -> MemoryRecord:
+def _make_record(
+    mem_id: int,
+    content: str,
+    category: str = "general",
+    importance: int = 5,
+) -> MemoryRecord:
     return MemoryRecord(
         id=mem_id,
         content=content,
@@ -50,10 +55,20 @@ def test_budgeted_memory_retriever_empty_query() -> None:
 def test_budgeted_memory_retriever_fits_within_budget() -> None:
     mock_retriever = MagicMock(spec=MemoryRetriever)
     candidates = (
-        MemorySearchResult(memory=_make_record(1, "User prefers dark mode", "preference"), score=3.0),
-        MemorySearchResult(memory=_make_record(2, "Project uses Python 3.12", "project"), score=2.5),
         MemorySearchResult(
-            memory=_make_record(3, "Long historical fact about previous deployments in the cloud", "history"),
+            memory=_make_record(1, "User prefers dark mode", "preference"),
+            score=3.0,
+        ),
+        MemorySearchResult(
+            memory=_make_record(2, "Project uses Python 3.12", "project"),
+            score=2.5,
+        ),
+        MemorySearchResult(
+            memory=_make_record(
+                3,
+                "Long historical fact about previous deployments in the cloud",
+                "history",
+            ),
             score=1.0,
         ),
     )
@@ -73,9 +88,17 @@ def test_budgeted_memory_retriever_fits_within_budget() -> None:
 def test_budgeted_memory_retriever_enforces_budget_boundary() -> None:
     mock_retriever = MagicMock(spec=MemoryRetriever)
     candidates = (
-        MemorySearchResult(memory=_make_record(1, "Fact one about user preferences", "preference"), score=3.0),
         MemorySearchResult(
-            memory=_make_record(2, "Fact two with a very long descriptive explanation that takes many tokens", "project"),
+            memory=_make_record(1, "Fact one about user preferences", "preference"),
+            score=3.0,
+        ),
+        MemorySearchResult(
+            memory=_make_record(
+                2,
+                "Fact two with a very long descriptive explanation "
+                "that takes many tokens",
+                "project",
+            ),
             score=2.0,
         ),
         MemorySearchResult(memory=_make_record(3, "Fact three", "general"), score=1.0),
@@ -87,7 +110,9 @@ def test_budgeted_memory_retriever_enforces_budget_boundary() -> None:
     header_cost = estimator.estimate_text(BudgetedMemoryRetriever.MEMORY_HEADER)
 
     # Budget allows header + first candidate, but not second
-    first_line_cost = estimator.estimate_text("\n- [Memory #1] (preference): Fact one about user preferences")
+    first_line_cost = estimator.estimate_text(
+        "\n- [Memory #1] (preference): Fact one about user preferences"
+    )
     tight_budget = header_cost + first_line_cost + 4
 
     result = retriever.retrieve("query", token_budget=tight_budget)

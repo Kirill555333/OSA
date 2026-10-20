@@ -66,7 +66,10 @@ class JarvisMainWindow(QMainWindow):
         # Left title info
         title_box = QVBoxLayout()
         title_label = QLabel("OSA AUTONOMOUS DESKTOP")
-        title_label.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {ACCENT_CYAN}; letter-spacing: 1px;")
+        title_label.setStyleSheet(
+            f"font-size: 18px; font-weight: bold; "
+            f"color: {ACCENT_CYAN}; letter-spacing: 1px;"
+        )
         self._status_desc = QLabel("СПИТ (ЖДУ СЛОВО 'ОСА')")
         self._status_desc.setStyleSheet(f"font-size: 12px; font-weight: bold; color: {TEXT_MUTED};")
         title_box.addWidget(title_label)
@@ -85,7 +88,9 @@ class JarvisMainWindow(QMainWindow):
         self._btn_voice_toggle = QPushButton("🔊 ГОЛОС: ВКЛ")
         self._btn_voice_toggle.setCheckable(True)
         self._btn_voice_toggle.setChecked(True)
-        self._btn_voice_toggle.setStyleSheet(f"color: {ACCENT_GREEN}; border-color: {ACCENT_GREEN};")
+        self._btn_voice_toggle.setStyleSheet(
+            f"color: {ACCENT_GREEN}; border-color: {ACCENT_GREEN};"
+        )
         controls_box.addWidget(self._btn_voice_toggle)
 
         header_layout.addLayout(controls_box)
@@ -118,7 +123,10 @@ class JarvisMainWindow(QMainWindow):
         input_layout.addWidget(self._btn_mic)
 
         self._input_field = QLineEdit()
-        self._input_field.setPlaceholderText("Напишите команду или вопрос для OSA (например: 'хочу куплинова посмотреть')...")
+        self._input_field.setPlaceholderText(
+            "Напишите команду или вопрос для OSA "
+            "(например: 'хочу куплинова посмотреть')..."
+        )
         input_layout.addWidget(self._input_field)
 
         self._btn_send = QPushButton("Отправить")
@@ -193,7 +201,9 @@ class JarvisMainWindow(QMainWindow):
         self._btn_voice_toggle.setText("🔊 ГОЛОС: ВКЛ" if is_on else "🔇 ГОЛОС: ВЫКЛ")
         color = ACCENT_GREEN if is_on else TEXT_MUTED
         self._btn_voice_toggle.setStyleSheet(f"color: {color}; border-color: {color};")
-        self._chat_view.append_system_notice("Голосовой вывод включен" if is_on else "Голосовой вывод отключен")
+        self._chat_view.append_system_notice(
+            "Голосовой вывод включен" if is_on else "Голосовой вывод отключен"
+        )
 
     def _on_state_changed(self, state: str) -> None:
         self._orb.set_state(state)

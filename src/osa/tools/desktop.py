@@ -129,7 +129,10 @@ class HotkeyTool(ToolInterface):
 
     @property
     def description(self) -> str:
-        return "Press a keyboard shortcut (e.g. ['command', 'f'] to search, ['command', 'n'] for new note)."
+        return (
+            "Press a keyboard shortcut (e.g. ['command', 'f'] to search, "
+            "['command', 'n'] for new note)."
+        )
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -172,7 +175,10 @@ class InspectScreenTool(ToolInterface):
 
     @property
     def description(self) -> str:
-        return "Look at the desktop screen with computer vision. Analyzes windows, buttons and text."
+        return (
+            "Look at the desktop screen with computer vision. "
+            "Analyzes windows, buttons and text."
+        )
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -190,14 +196,24 @@ class InspectScreenTool(ToolInterface):
     def execute(self, arguments: Mapping[str, Any]) -> ToolResult:
         query = str(arguments.get("query", "What is visible on screen?")).strip()
         try:
-            print(" [⚡ Компьютерное зрение: снимок экрана...]", flush=True)
+            print(
+                " [⚡ Компьютерное зрение: снимок экрана...]",
+                flush=True,
+            )
             screenshots_dir = resolve_osa_home() / "data" / "screenshots"
             screenshots_dir.mkdir(parents=True, exist_ok=True)
             out_path = screenshots_dir / "latest.png"
 
             if sys.platform == "darwin":
-                subprocess.run(["/usr/sbin/screencapture", "-x", "-t", "png", str(out_path)], check=True)
-                subprocess.run(["/usr/bin/sips", "-Z", "1024", str(out_path)], capture_output=True, check=True)
+                subprocess.run(
+                    ["/usr/sbin/screencapture", "-x", "-t", "png", str(out_path)],
+                    check=True,
+                )
+                subprocess.run(
+                    ["/usr/bin/sips", "-Z", "1024", str(out_path)],
+                    capture_output=True,
+                    check=True,
+                )
             else:
                 png_bytes = self._automation.screenshot()
                 out_path.write_bytes(png_bytes)
@@ -216,7 +232,10 @@ class InspectScreenTool(ToolInterface):
                 resp = self._model.generate(req)
                 return ToolResult(
                     success=True,
-                    output=resp.content.strip() or "Не удалось распознать экран.",
+                    output=(
+                        resp.content.strip()
+                        or "Не удалось распознать экран."
+                    ),
                     metadata={"screenshot": str(out_path)},
                 )
 
@@ -227,8 +246,22 @@ class InspectScreenTool(ToolInterface):
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": f"Ответь на русском кратко и по существу: {query}"},
-                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64_img}"}},
+                            {
+                                "type": "text",
+                                "text": (
+                                    "Ответь на русском кратко и по существу: "
+                                    f"{query}"
+                                ),
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": (
+                                        "data:image/png;base64,"
+                                        f"{b64_img}"
+                                    ),
+                                },
+                            },
                         ],
                     }
                 ],
@@ -371,7 +404,9 @@ class ScrollMouseTool(ToolInterface):
         delta = int(arguments.get("delta", 3))
         try:
             if sys.platform == "darwin":
-                cg = ctypes.cdll.LoadLibrary("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
+                cg = ctypes.cdll.LoadLibrary(
+                    "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
+                )
                 cg.CGEventCreateScrollWheelEvent.restype = ctypes.c_void_p
                 cg.CGEventCreateScrollWheelEvent.argtypes = [
                     ctypes.c_void_p,
@@ -386,7 +421,9 @@ class ScrollMouseTool(ToolInterface):
                 if not event:
                     return ToolResult(
                         success=False,
-                        error="Не удалось создать событие прокрутки.",
+                        error=(
+                            "Не удалось создать событие прокрутки."
+                        ),
                     )
                 cg.CGEventPost(0, event)
                 cg.CFRelease(event)
@@ -394,7 +431,9 @@ class ScrollMouseTool(ToolInterface):
 
             return ToolResult(
                 success=False,
-                error="Прокрутка пока не поддерживается на этой платформе.",
+                error=(
+                    "Прокрутка пока не поддерживается на этой платформе."
+                ),
             )
         except Exception as exc:
             return ToolResult(success=False, error=f"Failed to scroll: {exc}")
