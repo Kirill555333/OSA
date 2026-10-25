@@ -12,6 +12,7 @@ from osa.models.interface import (
     ToolCall,
     ToolDefinition,
 )
+from osa.models.config import ModelConfig
 from osa.models.local import LlamaCppConfig, LlamaCppModel
 from osa.models.registry import ModelRegistry
 
@@ -19,6 +20,7 @@ __all__ = [
     "ChatMessage",
     "LlamaCppConfig",
     "LlamaCppModel",
+    "ModelConfig",
     "ModelConnectionError",
     "ModelError",
     "ModelInterface",

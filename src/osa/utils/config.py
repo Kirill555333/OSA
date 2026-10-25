@@ -100,11 +100,15 @@ def load_models_config(
     """Load per-role model configs from config/default.yaml.
 
     Returns a dict with keys 'reasoning' and 'vision' (both present),
-    and optionally 'router'. Each value is an LlamaCppConfig.
+    and optionally 'router'. Each value is a ModelConfig (6.1).
 
-    Precedence for base_url: explicit YAML > OSA_LLAMA_URL env > 127.0.0.1:8080.
+    Precedence for base_url (llama_cpp only): explicit YAML > OSA_LLAMA_URL
+    env > 127.0.0.1:8080. For non-llama_cpp providers without an explicit
+    base_url, base_url stays None.
     """
-    from osa.models.local import LlamaCppConfig
+    import os
+
+    from osa.models.config import ModelConfig
 
     config_path = path or Path('config') / 'default.yaml'
     models_section: dict[str, Any] = {}
@@ -136,7 +140,7 @@ def load_models_config(
                 "'models' section must be a mapping."
             )
 
-    def _build(role_name: str, default_timeout: float) -> LlamaCppConfig:
+    def _build(role_name: str, default_timeout: float) -> ModelConfig:
         role_raw = models_section.get(role_name) or {}
 
         if not isinstance(role_raw, dict):
@@ -144,17 +148,36 @@ def load_models_config(
                 f"'models.{role_name}' must be a mapping."
             )
 
+        provider = str(role_raw.get('provider', 'llama_cpp')).strip() or 'llama_cpp'
+
         kwargs: dict[str, Any] = {
+            'provider': provider,
             'timeout': float(role_raw.get('timeout', default_timeout)),
         }
 
         if 'base_url' in role_raw:
             kwargs['base_url'] = str(role_raw['base_url'])
+        elif provider == 'llama_cpp':
+            kwargs['base_url'] = os.environ.get(
+                'OSA_LLAMA_URL', 'http://127.0.0.1:8080'
+            )
 
         if 'model_name' in role_raw:
             kwargs['model_name'] = str(role_raw['model_name'])
 
-        return LlamaCppConfig(**kwargs)
+        if 'api_key_env' in role_raw:
+            kwargs['api_key_env'] = str(role_raw['api_key_env'])
+
+        if 'max_context' in role_raw:
+            kwargs['max_context'] = int(role_raw['max_context'])
+
+        if 'supports_vision' in role_raw:
+            kwargs['supports_vision'] = bool(role_raw['supports_vision'])
+
+        if 'supports_tools' in role_raw:
+            kwargs['supports_tools'] = bool(role_raw['supports_tools'])
+
+        return ModelConfig(**kwargs)
 
     result: dict[str, Any] = {
         'reasoning': _build('reasoning', 45.0),
@@ -165,8 +188,6 @@ def load_models_config(
         result['router'] = _build('router', 30.0)
 
     return result
-
-
 @dataclass(frozen=True)
 class EnvironmentConfig:
     """Immutable, typed access to environment-style configuration values."""

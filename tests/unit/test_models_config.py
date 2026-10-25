@@ -112,3 +112,86 @@ def test_models_section_not_a_mapping_raises(tmp_path):
     cfg_path = _write(tmp_path, "models: [1, 2, 3]")
     with pytest.raises(ConfigError, match="'models' section must be a mapping"):
         load_models_config(cfg_path)
+
+# --- 6.1: ModelConfig fields and provider behavior -------------------------
+
+
+def test_default_provider_is_llama_cpp(tmp_path, monkeypatch):
+    monkeypatch.delenv("OSA_LLAMA_URL", raising=False)
+    cfg_path = _write(tmp_path, """
+models:
+  reasoning: {}
+  vision: {}
+""")
+    cfg = load_models_config(cfg_path)
+    assert cfg["reasoning"].provider == "llama_cpp"
+    assert cfg["vision"].provider == "llama_cpp"
+
+
+def test_explicit_openai_provider_parses(tmp_path):
+    cfg_path = _write(tmp_path, """
+models:
+  reasoning:
+    provider: "openai"
+    base_url: "https://api.openai.com"
+    model_name: "gpt-4o-mini"
+  vision: {}
+""")
+    cfg = load_models_config(cfg_path)
+    assert cfg["reasoning"].provider == "openai"
+    assert cfg["reasoning"].base_url == "https://api.openai.com"
+    assert cfg["reasoning"].model_name == "gpt-4o-mini"
+
+
+def test_unknown_provider_raises(tmp_path):
+    cfg_path = _write(tmp_path, """
+models:
+  reasoning:
+    provider: "foobar"
+  vision: {}
+""")
+    with pytest.raises(ConfigError, match="provider"):
+        load_models_config(cfg_path)
+
+
+def test_openai_without_base_url_does_not_inherit_llama_url(tmp_path, monkeypatch):
+    monkeypatch.setenv("OSA_LLAMA_URL", "http://10.0.0.1:9090")
+    cfg_path = _write(tmp_path, """
+models:
+  reasoning:
+    provider: "openai"
+  vision: {}
+""")
+    cfg = load_models_config(cfg_path)
+    assert cfg["reasoning"].base_url is None
+    assert cfg["vision"].base_url == "http://10.0.0.1:9090"
+
+
+def test_llamacpp_without_base_url_uses_llama_url_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("OSA_LLAMA_URL", "http://10.0.0.1:9090")
+    cfg_path = _write(tmp_path, """
+models:
+  reasoning: {}
+  vision: {}
+""")
+    cfg = load_models_config(cfg_path)
+    assert cfg["reasoning"].base_url == "http://10.0.0.1:9090"
+
+
+def test_existing_default_yaml_still_works(tmp_path, monkeypatch):
+    monkeypatch.delenv("OSA_LLAMA_URL", raising=False)
+    cfg_path = _write(tmp_path, """
+agent:
+  temperature: 0.1
+
+models:
+  reasoning:
+    timeout: 45.0
+  vision:
+    timeout: 60.0
+""")
+    cfg = load_models_config(cfg_path)
+    assert cfg["reasoning"].provider == "llama_cpp"
+    assert cfg["vision"].provider == "llama_cpp"
+    assert cfg["reasoning"].timeout == 45.0
+    assert cfg["vision"].timeout == 60.0

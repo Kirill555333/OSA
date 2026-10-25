@@ -1,4 +1,4 @@
-"""Tests for check_all_models (4.7)."""
+"""Tests for check_all_models (4.7, updated in 6.1)."""
 
 from __future__ import annotations
 
@@ -7,13 +7,17 @@ from unittest.mock import patch
 
 def test_check_all_models_both_ok(monkeypatch, tmp_path):
     from osa import main as main_module
-    from osa.models import LlamaCppConfig
+    from osa.models import ModelConfig
 
-    reasoning_cfg = LlamaCppConfig(
-        base_url="http://127.0.0.1:8081", model_name="qwen3-8b"
+    reasoning_cfg = ModelConfig(
+        provider="llama_cpp",
+        base_url="http://127.0.0.1:8081",
+        model_name="qwen3-8b",
     )
-    vision_cfg = LlamaCppConfig(
-        base_url="http://127.0.0.1:8080", model_name="qwen2.5-vl-3b"
+    vision_cfg = ModelConfig(
+        provider="llama_cpp",
+        base_url="http://127.0.0.1:8080",
+        model_name="qwen2.5-vl-3b",
     )
 
     with patch.object(
@@ -29,10 +33,14 @@ def test_check_all_models_both_ok(monkeypatch, tmp_path):
 
 def test_check_all_models_reasoning_down(monkeypatch):
     from osa import main as main_module
-    from osa.models import LlamaCppConfig
+    from osa.models import ModelConfig
 
-    reasoning_cfg = LlamaCppConfig(base_url="http://127.0.0.1:8081")
-    vision_cfg = LlamaCppConfig(base_url="http://127.0.0.1:8080")
+    reasoning_cfg = ModelConfig(
+        provider="llama_cpp", base_url="http://127.0.0.1:8081"
+    )
+    vision_cfg = ModelConfig(
+        provider="llama_cpp", base_url="http://127.0.0.1:8080"
+    )
 
     def fake_check(url):
         return "8080" in url
@@ -59,3 +67,29 @@ def test_check_all_models_config_error():
 
     assert ok is False
     assert any("Config error" in line for line in lines)
+
+
+def test_check_all_models_non_llama_provider_shows_not_supported():
+    """Non-llama_cpp roles get an explicit [?] line, not a misleading [x]."""
+    from osa import main as main_module
+    from osa.models import ModelConfig
+
+    reasoning_cfg = ModelConfig(
+        provider="openai",
+        base_url="https://api.openai.com",
+        model_name="gpt-4o-mini",
+    )
+    vision_cfg = ModelConfig(
+        provider="llama_cpp",
+        base_url="http://127.0.0.1:8080",
+        model_name="qwen2.5-vl-3b",
+    )
+
+    with patch.object(
+        main_module, "load_models_config",
+        return_value={"reasoning": reasoning_cfg, "vision": vision_cfg},
+    ), patch.object(main_module, "check_llama_server", return_value=True):
+        ok, lines = main_module.check_all_models()
+
+    assert ok is True
+    assert any("[?]" in line and "openai" in line for line in lines)
