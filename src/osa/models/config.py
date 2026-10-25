@@ -13,7 +13,6 @@ from typing import Any, Mapping
 
 from osa.utils.config import ConfigError
 
-
 SUPPORTED_PROVIDERS: frozenset[str] = frozenset({"llama_cpp", "openai"})
 
 

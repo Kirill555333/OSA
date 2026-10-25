@@ -1,5 +1,6 @@
 """Model layer for OSA."""
 
+from osa.models.config import ModelConfig
 from osa.models.interface import (
     ChatMessage,
     ModelConnectionError,
@@ -7,12 +8,11 @@ from osa.models.interface import (
     ModelInterface,
     ModelRequest,
     ModelResponse,
-    ModelStreamEvent,
     ModelResponseError,
+    ModelStreamEvent,
     ToolCall,
     ToolDefinition,
 )
-from osa.models.config import ModelConfig
 from osa.models.local import LlamaCppConfig, LlamaCppModel
 from osa.models.registry import ModelRegistry
 
@@ -28,6 +28,7 @@ __all__ = [
     "ModelRequest",
     "ModelResponse",
     "ModelResponseError",
+    "ModelStreamEvent",
     "ToolCall",
     "ToolDefinition",
 ]

@@ -10,11 +10,11 @@ from __future__ import annotations
 import base64
 import http.client
 import json
+import os
 import re
 import urllib.parse
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-import os
 from pathlib import Path
 from typing import Any
 

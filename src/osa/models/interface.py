@@ -7,7 +7,6 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any, Literal, Mapping
 
-
 MessageRole = Literal["system", "user", "assistant", "tool"]
 
 
