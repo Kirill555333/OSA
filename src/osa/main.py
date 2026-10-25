@@ -131,6 +131,8 @@ def check_all_models() -> tuple[bool, list[str]]:
             all_ok = False
 
     return all_ok, lines
+
+
 def _model_from_config(config: ModelConfig) -> LlamaCppModel:
     """Build a model client from a ModelConfig (bridge until 6.2 factory).
 
