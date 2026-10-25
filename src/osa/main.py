@@ -19,11 +19,7 @@ from osa.memory import (
 )
 from osa.memory.integration import MemoryIntegration
 from osa.memory.retrieval import MemoryRetriever
-from osa.models import (
-    LlamaCppConfig,
-    LlamaCppModel,
-    ModelConfig,
-)
+from osa.models import create_model
 from osa.permissions import (
     ConfirmationHandler,
     PermissionLevel,
@@ -68,7 +64,7 @@ from osa.tools import (
     WebResearchTool,
     WriteFileTool,
 )
-from osa.utils.config import ConfigError, load_agent_config, load_models_config
+from osa.utils.config import load_agent_config, load_models_config
 from osa.utils.logging import EventLogger
 from osa.utils.paths import resolve_osa_home, resolve_workspace
 from osa.version import __version__
@@ -133,33 +129,6 @@ def check_all_models() -> tuple[bool, list[str]]:
     return all_ok, lines
 
 
-def _model_from_config(config: ModelConfig) -> LlamaCppModel:
-    """Build a model client from a ModelConfig (bridge until 6.2 factory).
-
-    Only provider="llama_cpp" is supported in 6.1. Other providers raise
-    ConfigError; the factory in 6.2 will dispatch to OpenAIModel.
-    """
-    if config.provider != "llama_cpp":
-        raise ConfigError(
-            f"provider '{config.provider}' is not implemented until 6.3"
-        )
-
-    default_model_name = LlamaCppConfig().model_name
-    model_name = (
-        config.model_name
-        if config.model_name and config.model_name != "default"
-        else default_model_name
-    )
-
-    return LlamaCppModel(
-        LlamaCppConfig(
-            base_url=config.base_url or "http://127.0.0.1:8080",
-            model_name=model_name,
-            timeout=config.timeout,
-        )
-    )
-
-
 def create_agent(
     memory_storage: LongTermMemory | None = None,
     confirmation_handler: ConfirmationHandler | None = None,
@@ -168,8 +137,8 @@ def create_agent(
     """Build and configure the main OSA agent with complete native Tool Calling."""
     models_config = load_models_config()
     agent_config = load_agent_config()
-    model = _model_from_config(models_config['reasoning'])
-    vision_model = _model_from_config(models_config['vision'])
+    model = create_model(models_config['reasoning'])
+    vision_model = create_model(models_config['vision'])
 
     server_n_ctx = model.context_size()
     if not isinstance(server_n_ctx, int) or server_n_ctx <= 0:

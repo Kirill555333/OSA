@@ -1,4 +1,4 @@
-"""Tests for create_agent model wiring (4.5, updated in 6.1)."""
+"""Tests for create_agent model wiring (4.5, updated in 6.1/6.2)."""
 
 from __future__ import annotations
 
@@ -28,10 +28,11 @@ def test_inspect_screen_uses_vision_model() -> None:
 
 
 def test_create_agent_runtime_uses_reasoning_client(tmp_path, monkeypatch):
-    """Behavioral check: reasoning ModelConfig must reach LlamaCppModel.
+    """Behavioral check: reasoning ModelConfig reaches create_model first.
 
-    Compared by value (base_url), not by object identity: _model_from_config
-    constructs a fresh LlamaCppConfig from ModelConfig.
+    Patches main_module.create_model (not LlamaCppModel) because 6.2 routes
+    model construction through the factory. Compared by value (base_url),
+    not by object identity.
     """
     monkeypatch.setenv("OSA_HOME", str(tmp_path))
     monkeypatch.setenv("OSA_WORKSPACE", str(tmp_path))
@@ -52,18 +53,19 @@ def test_create_agent_runtime_uses_reasoning_client(tmp_path, monkeypatch):
     )
 
     fake_reasoning = MagicMock(spec=LlamaCppModel)
+    fake_reasoning.context_size.return_value = 8192
     fake_vision = MagicMock(spec=LlamaCppModel)
 
     captured: dict[str, list[str]] = {"seen_urls": []}
 
-    def fake_factory(llamacpp_config):
-        captured["seen_urls"].append(llamacpp_config.base_url)
-        if llamacpp_config.base_url == "http://127.0.0.1:8081":
+    def fake_create_model(config):
+        captured["seen_urls"].append(config.base_url)
+        if config.base_url == "http://127.0.0.1:8081":
             return fake_reasoning
         return fake_vision
 
     with patch.object(main_module, "load_models_config") as mock_cfg, \
-         patch.object(main_module, "LlamaCppModel", side_effect=fake_factory):
+         patch.object(main_module, "create_model", side_effect=fake_create_model):
         mock_cfg.return_value = {"reasoning": reasoning_cfg, "vision": vision_cfg}
         agent = main_module.create_agent()
 
