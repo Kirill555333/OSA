@@ -1,6 +1,7 @@
 """Model layer for OSA."""
 
 from osa.models.config import ModelConfig
+from osa.models.factory import create_model
 from osa.models.interface import (
     ChatMessage,
     ModelConnectionError,
@@ -31,4 +32,5 @@ __all__ = [
     "ModelStreamEvent",
     "ToolCall",
     "ToolDefinition",
+    "create_model",
 ]
